@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "author": "Foysal Ahmed",
+  "date": "August 2026",
+  "baseline": {
+    "laravel": "^12.0 || ^13.0",
+    "php": "^8.3"
+  },
+  "abstract": "Placement rules for domain-driven Laravel applications. Defines when to create an Action, Service, Repository, Query Class or Value Object — and, more importantly, when not to. Built around a Decision Gate whose default answer is always 'keep it in the Action, use Eloquent directly'. Covers the query-construction boundary, bounded-context integration, directory layout and configuration placement.",
+  "references": [
+    "https://laravel.com/docs/13.x",
+    "https://laravel.com/docs/13.x/container",
+    "https://laravel.com/docs/13.x/eloquent",
+    "https://laravel.com/docs/13.x/events",
+    "https://laravel.com/docs/13.x/configuration"
+  ]
+}

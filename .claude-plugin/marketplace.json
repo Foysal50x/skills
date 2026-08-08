@@ -1,0 +1,23 @@
+{
+  "name": "foysal50x",
+  "owner": {
+    "name": "Foysal Ahmed",
+    "email": "foysal20x@gmail.com"
+  },
+  "metadata": {
+    "description": "Opinionated Laravel engineering skills for AI coding agents."
+  },
+  "plugins": [
+    {
+      "name": "laravel-skills",
+      "source": "./",
+      "description": "Laravel architecture, Eloquent, HTTP, async and testing skills — Action / Service / Repository / Query Class / Value Object patterns for domain-driven Laravel apps.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Foysal Ahmed",
+        "email": "foysal20x@gmail.com"
+      },
+      "category": "productivity"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compile AGENTS.md
+        run: node scripts/build-agents.mjs
+      - name: Validate skills
+        run: node scripts/validate.mjs
+      - name: Fail if AGENTS.md is stale
+        run: |
+          if ! git diff --quiet -- 'skills/*/AGENTS.md'; then
+            echo "AGENTS.md is out of date. Run: npm run build" >&2
+            git diff --stat -- 'skills/*/AGENTS.md' >&2
+            exit 1
+          fi

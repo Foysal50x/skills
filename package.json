@@ -1,0 +1,13 @@
+{
+  "name": "@foysal50x/laravel-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Laravel engineering skills for AI coding agents",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-agents.mjs",
+    "validate": "node scripts/validate.mjs",
+    "check": "npm run build && npm run validate"
+  },
+  "license": "MIT"
+}

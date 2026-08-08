@@ -1,0 +1,31 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Architecture",
+      "description": "How to place a class in a domain-driven Laravel application: Action, Service, Repository, Query Class, Value Object.",
+      "skills": ["laravel-patterns"]
+    },
+    {
+      "title": "Data",
+      "description": "Eloquent models, scopes, query performance, pagination, transactions and raw SQL placement.",
+      "skills": ["laravel-eloquent"]
+    },
+    {
+      "title": "HTTP",
+      "description": "Routing, route model binding, form requests, controllers, API resources, authorization and error mapping.",
+      "skills": ["laravel-http"]
+    },
+    {
+      "title": "Async",
+      "description": "Domain events, queued jobs, queue operations, caching and scheduling.",
+      "skills": ["laravel-async"]
+    },
+    {
+      "title": "Testing",
+      "description": "Test strategy per architectural layer, fakes, database tests and feature tests.",
+      "skills": ["laravel-testing"]
+    }
+  ]
+}

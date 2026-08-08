@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "author": "Foysal Ahmed",
+  "date": "August 2026",
+  "baseline": {
+    "laravel": "^12.0 || ^13.0",
+    "php": "^8.3"
+  },
+  "abstract": "Asynchronous and caching rules for Laravel: idempotent queued jobs with retries and backoff, domain events for cross-context side effects, queue separation and failure handling, deterministic cache keys with event-driven invalidation, and scheduled tasks that queue rather than block. Laravel 13 job attributes and queue routing are marked as such.",
+  "references": [
+    "https://laravel.com/docs/13.x/queues",
+    "https://laravel.com/docs/13.x/events",
+    "https://laravel.com/docs/13.x/cache",
+    "https://laravel.com/docs/13.x/scheduling",
+    "https://laravel.com/docs/13.x/horizon"
+  ]
+}

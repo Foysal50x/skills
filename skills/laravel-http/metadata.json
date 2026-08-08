@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "author": "Foysal Ahmed",
+  "date": "August 2026",
+  "baseline": {
+    "laravel": "^12.0 || ^13.0",
+    "php": "^8.3"
+  },
+  "abstract": "HTTP-edge rules for Laravel: authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, and domain exceptions mapped to status codes centrally. Laravel 13 attribute APIs are marked as such.",
+  "references": [
+    "https://laravel.com/docs/13.x/routing",
+    "https://laravel.com/docs/13.x/controllers",
+    "https://laravel.com/docs/13.x/validation",
+    "https://laravel.com/docs/13.x/authorization",
+    "https://laravel.com/docs/13.x/eloquent-resources",
+    "https://laravel.com/docs/13.x/errors"
+  ]
+}

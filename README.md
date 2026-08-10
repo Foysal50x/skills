@@ -144,7 +144,7 @@ CI runs both on every push and fails if `AGENTS.md` is stale.
 ### Adding a rule
 
 1. Copy `rules/_template.md` to `rules/{prefix}-{slug}.md`, using a prefix declared in `rules/_sections.md`.
-2. Fill in the frontmatter (`title`, `impact`, `tags`) and both code examples.
+2. Fill in the frontmatter (`title`, `impact`, `tags`) and both code examples. Quote any value containing `: ` or ` #` — the frontmatter is parsed as strict YAML at install time.
 3. Add the slug to the Quick Reference list in `SKILL.md`, and to the Pick the Rule table if it answers a distinct question.
 4. Run `npm run check`.
 

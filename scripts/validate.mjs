@@ -13,6 +13,30 @@ const RULE_MAX_CHARS = 2500
 const RULE_WARN_CHARS = 2200
 const IMPACTS = new Set(['CRITICAL', 'HIGH', 'MEDIUM-HIGH', 'MEDIUM', 'LOW-MEDIUM', 'LOW'])
 
+/**
+ * The repo's own frontmatter reader is forgiving; the installers that consume these
+ * skills use a real YAML parser. This catches the plain-scalar mistakes that make one
+ * reject a file outright or silently read half a value.
+ */
+function frontmatterProblems(frontmatter) {
+  const problems = []
+  for (const line of (frontmatter ?? '').split('\n')) {
+    const match = line.match(/^\s*[\w.-]+:[ \t]*(.*)$/)
+    if (!match) continue
+    const value = match[1].trim()
+    if (!value) continue
+    const quoted =
+      (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))
+    if (quoted) continue
+
+    const where = `\`${line.trim()}\``
+    if (/:[ \t]/.test(value)) problems.push(`${where} — ": " opens a nested mapping; quote the value`)
+    if (/[ \t]#/.test(value)) problems.push(`${where} — " #" starts a YAML comment; quote the value`)
+    if (/^[[\]{}&*!|>%@`]/.test(value)) problems.push(`${where} — leading "${value[0]}" is YAML syntax; quote the value`)
+  }
+  return problems
+}
+
 const errors = []
 const warnings = []
 const skills = listSkills()
@@ -30,7 +54,9 @@ for (const skill of skills) {
   }
 
   const skillSource = readFileSync(skillPath, 'utf8')
-  const meta = parseFrontmatter(splitFrontmatter(skillSource).frontmatter)
+  const skillFrontmatter = splitFrontmatter(skillSource).frontmatter
+  for (const problem of frontmatterProblems(skillFrontmatter)) fail(`SKILL.md frontmatter: ${problem}`)
+  const meta = parseFrontmatter(skillFrontmatter)
   if (!meta.name) fail('SKILL.md frontmatter has no `name`')
   if (meta.name && meta.name !== skill) fail(`SKILL.md name "${meta.name}" does not match directory "${skill}"`)
   if (!meta.description) fail('SKILL.md frontmatter has no `description`')
@@ -72,6 +98,7 @@ for (const skill of skills) {
     if (!rule.impact) fail(`${where}: missing \`impact\``)
     if (rule.impact && !IMPACTS.has(rule.impact)) fail(`${where}: invalid impact "${rule.impact}"`)
     if (!rule.tags) fail(`${where}: missing \`tags\``)
+    for (const problem of frontmatterProblems(frontmatter)) fail(`${where} frontmatter: ${problem}`)
 
     if (!prefixes.some((prefix) => name.startsWith(prefix))) {
       fail(`${where}: filename prefix matches no section in _sections.md`)

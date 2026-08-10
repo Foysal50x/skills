@@ -17,28 +17,30 @@ npx skills add Foysal50x/skills
 Or a single skill:
 
 ```bash
-npx skills add Foysal50x/skills --skill laravel-patterns
+npx skills add Foysal50x/skills --skill patterns
 ```
 
 ### Claude Code plugin
 
 ```
 /plugin marketplace add Foysal50x/skills
-/plugin install laravel-skills@foysal50x
+/plugin install laravel-skill@foysal50x
 ```
 
-Skills are then invoked as `laravel-skills:laravel-patterns`, `laravel-skills:laravel-eloquent`, and so on.
+The plugin namespaces every skill, so they are invoked as `laravel-skill:patterns`, `laravel-skill:eloquent`, `laravel-skill:rest-api`, `laravel-skill:async` and `laravel-skill:testing`.
 
 ### Manual
 
 ```bash
 git clone https://github.com/Foysal50x/skills.git
-cp -r skills/skills/laravel-patterns ~/.claude/skills/
+cp -r skills/skills/patterns ~/.claude/skills/laravel-patterns
 ```
+
+Installed manually the folder name *is* the skill name, so rename it (`laravel-patterns`) — outside the plugin there is no `laravel-skill:` namespace to disambiguate it.
 
 ## Available Skills
 
-### laravel-patterns
+### laravel-skill:patterns
 
 Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 59 rules.
 
@@ -53,7 +55,7 @@ Placement rules for domain-driven Laravel: when to create an Action, Service, Re
 
 **Core philosophy:** practicality over purity. The default answer is always "keep it in the Action, use Eloquent directly."
 
-### laravel-eloquent
+### laravel-skill:eloquent
 
 Data-layer engineering: what goes *inside* a Query Class. 36 rules.
 
@@ -66,7 +68,7 @@ Data-layer engineering: what goes *inside* a Query Class. 36 rules.
 
 **Covers:** N+1 elimination · pagination strategy · transactions and locking · casts and model declaration · scopes, global scopes and soft deletes · raw SQL and type-safe expressions · bulk operations
 
-### laravel-http
+### laravel-skill:rest-api
 
 The edge: translating HTTP into domain types and back. 31 rules.
 
@@ -79,7 +81,7 @@ The edge: translating HTTP into domain types and back. 31 rules.
 
 **Covers:** authorization · Form Requests and DTO construction · route model binding and scoped nested bindings · API Resources · exception-to-status mapping · thin controllers
 
-### laravel-async
+### laravel-skill:async
 
 Work that happens outside the request. 29 rules.
 
@@ -92,7 +94,7 @@ Work that happens outside the request. 29 rules.
 
 **Covers:** idempotent jobs with retries and backoff · domain events and queued listeners · queue separation and monitoring · cache keys, tags, invalidation and stampede protection · scheduling
 
-### laravel-testing
+### laravel-skill:testing
 
 Test strategy for a layered application. 18 rules.
 
@@ -117,7 +119,7 @@ skills/{skill-name}/
     _template.md    rule template
     {prefix}-{slug}.md
   references/       read-on-demand deep dives and checklists
-  examples/         worked code (laravel-patterns only)
+  examples/         worked code (laravel-skill:patterns only)
 ```
 
 Rule filenames are prefixed by section (`gate-`, `repo-`, `perf-`, `job-`). `SKILL.md` stays under 500 lines so it is cheap to load; the detail lives in `rules/` and `references/`, read only when needed.
@@ -136,12 +138,12 @@ CI runs both on every push and fails if `AGENTS.md` is stale.
 
 1. Copy `rules/_template.md` to `rules/{prefix}-{slug}.md`, using a prefix declared in `rules/_sections.md`.
 2. Fill in the frontmatter (`title`, `impact`, `tags`) and both code examples.
-3. Add the slug to the Quick Reference list in `SKILL.md`.
+3. Add the slug to the Quick Reference list in `SKILL.md`, and to the Pick the Rule table if it answers a distinct question.
 4. Run `npm run check`.
 
 ## Sources
 
-The `laravel-patterns` rules formalize the architecture described in:
+The `laravel-skill:patterns` rules formalize the architecture described in:
 
 - *Laravel Architecture: Service vs Repository — When to Split, When to Combine*
 - *The Eloquent Query Classes pattern*

@@ -13,13 +13,13 @@ This repo contains **documentation, not application code**. There is no PHP to r
 ```
 .claude-plugin/
   marketplace.json      marketplace "foysal50x"
-  plugin.json           plugin "laravel-skills"
+  plugin.json           plugin "laravel-skill" — namespaces skills as laravel-skill:<name>
 skills.sh.json          skills.sh grouping metadata
 scripts/
   lib.mjs               shared parsing helpers
   build-agents.mjs      rules/*.md + _sections.md → AGENTS.md
   validate.mjs          structural validation
-skills/{skill-name}/
+skills/{skill-name}/         async · eloquent · patterns · rest-api · testing
   SKILL.md              index (max 500 lines)
   AGENTS.md             generated — never edit by hand
   metadata.json
@@ -28,7 +28,7 @@ skills/{skill-name}/
   rules/_template.md
   rules/{prefix}-{slug}.md
   references/*.md       read-on-demand deep dives
-  examples/             worked code (laravel-patterns only)
+  examples/             worked code (laravel-skill:patterns only)
 ```
 
 ## Commands
@@ -50,6 +50,7 @@ Always run `npm run check` before committing. CI fails if `AGENTS.md` is stale.
 - Body: an `## {title}` heading matching the frontmatter exactly, one or two sentences of rationale, then `**Incorrect (...):**` and `**Correct (...):**` code blocks.
 - Cross-reference sibling rules as `` `rules/{slug}.md` `` — the validator checks these resolve.
 - Every rule slug must appear in its `SKILL.md` Quick Reference, in backticks.
+- Cross-reference another skill as `` `laravel-skill:<name>` `` — the validator checks these resolve.
 - **Size budget: 2500 characters (~600 tokens).** The validator errors above it and warns from 2200. One rule, one or two sentences of rationale, one incorrect and one correct example — nothing else. Needing more means it is two rules, or the detail belongs in `references/`.
 
 ### Token cost model
@@ -87,10 +88,11 @@ Sections are ordered by impact — what breaks an application first comes first.
 ## Adding a Skill
 
 1. `mkdir -p skills/{name}/{rules,references}`
-2. Write `SKILL.md` with `name` matching the directory and a description specific enough to trigger reliably (at least 60 characters, naming concrete situations).
+2. Write `SKILL.md` with `name` matching the directory (bare, no `laravel-` prefix — the plugin adds the `laravel-skill:` namespace) and a description that opens with "Laravel" and names concrete situations. The description is the only trigger signal, so it carries the weight the short name no longer does.
 3. Write `rules/_sections.md`, then the rule files.
 4. Copy `rules/_template.md` from an existing skill.
-5. Add the skill to `skills.sh.json` and the root `README.md`.
+5. Add the skill to `skills.sh.json` (bare name) and the root `README.md`.
+6. Give it a `## Pick the Rule` routing table and the shared `## Before You Write Code` block, both above `## Rule Sections by Priority`.
 6. `npm run check`
 
 ## Git

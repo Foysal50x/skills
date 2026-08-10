@@ -112,14 +112,19 @@ SQLite differs from MySQL and Postgres on JSON operators, full-text search, lock
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~465 tokens each):
 
 ```
 rules/fake-repository-anonymous-class.md
 rules/db-assert-inclusion-and-exclusion.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~8k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 

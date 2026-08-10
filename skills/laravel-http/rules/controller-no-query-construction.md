@@ -9,14 +9,7 @@ tags: controller, query, boundary, architecture
 
 `where()`, `orderBy()`, `with()` and `join()` do not appear in a controller. The controller builds Value Objects from the request and calls the Repository; the Query Class writes the clauses.
 
-This holds however small the query looks. It includes:
-
-- a single `where()` plus `paginate()` — a list is a named query, not simple CRUD
-- a relation read off the authenticated user, `$request->user()->notifications()->…`
-- `->when($request->boolean('unread'), …)` — an optional filter is a query rule
-- a page size taken from the request, and `latest()` / `orderBy()` defaults
-
-The same applies to a Blade view and to a Form Request: a view receives data, it does not fetch it, and `authorize()`/`rules()` never build a result set.
+It holds however small the query looks — a lone `where()` with `paginate()`, a relation read off `$request->user()`, an optional `->when()` filter, a request-supplied page size, a `latest()` default. Same for a Blade view and a Form Request: a view receives data rather than fetching it, and `authorize()`/`rules()` never build a result set.
 
 **Incorrect (filters built in the controller, duplicated in the export endpoint):**
 
@@ -63,17 +56,8 @@ public function __invoke(SearchOrdersRequest $request, OrderRepositoryInterface 
 ```
 
 ```php
-final class ListNotificationsController
-{
-    public function __invoke(
-        ListNotificationsRequest $request,
-        NotificationRepositoryInterface $notifications,
-    ): AnonymousResourceCollection {
-        return NotificationResource::collection(
-            $notifications->feedFor($request->user(), $request->toFilter()),
-        );
-    }
-}
+// ...and the same shape for the second: one call, no clauses.
+return NotificationResource::collection($notifications->feedFor($request->user(), $request->toFilter()));
 ```
 
-The sort column is whitelisted and the page-size cap lives in the filter Value Object, not in a controller expression. See the `laravel-patterns` skill for the full boundary.
+The sort column is whitelisted and the page-size cap lives in the filter Value Object. See the `laravel-patterns` skill for the full boundary.

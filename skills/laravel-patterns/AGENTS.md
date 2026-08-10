@@ -171,11 +171,11 @@ See `rules/query-internal-to-repositories.md` for the enforcement boundary.
 
 ## A List Endpoint Is a Named Query
 
-Q4 ("Eloquent directly") covers single-record work: `find()`, a route-bound model, `$model->update()`, `create()`, `delete()`. It does not cover a list.
+Q4 ("Eloquent directly") covers single-record work: `find()`, a route-bound model, `create()`, `$model->update()`. It does not cover a list.
 
-A paginated list always carries rules — an ownership or tenant constraint, a default ordering, a page-size cap, optional filters, an allow-list of sortable columns. That is a named query, so it takes Q5(b): a Repository method with a Query Class behind it. Deciding this per endpoint is what produces one domain with a Repository and the next with `Model::query()` in a controller.
+A paginated list always carries rules — an ownership constraint, a default ordering, a page-size cap, optional filters, an allow-list of sortable columns. That is Q5(b): a Repository method with a Query Class behind it. Deciding this per endpoint is what produces one domain with a Repository and the next with `Model::query()` in a controller.
 
-**Incorrect (a list assembled at the edge because it "looked simple"):**
+**Incorrect (a list assembled at the edge because it looked simple):**
 
 ```php
 final class ListTagsController
@@ -192,57 +192,36 @@ final class ListTagsController
 }
 ```
 
-The ownership constraint, the ordering and the page size now live in a controller. The next endpoint that lists tags — the export, the picker, the admin screen — copies all three, and the day tags gain an `archived_at` column three files need the same `where`.
+Ownership, ordering and page size now live in a controller. The export, the picker and the admin screen each copy all three, and the day tags gain `archived_at` three files need the same `where`.
 
 **Correct (the rules live in one named query):**
 
 ```php
-// app/Domain/Tagging/Contracts/TagRepositoryInterface.php
-/**
- * Trigger: Q5(b) — the owned-tag list drives the index endpoint, the picker
- * and the CSV export. One change point for ownership and ordering.
- */
-interface TagRepositoryInterface
+// Contracts/TagRepositoryInterface.php — Trigger: Q5(b), the owned-tag list
+// drives the index endpoint, the picker and the CSV export.
+public function ownedBy(User $user, TagFilter $filter): LengthAwarePaginator;
+
+// Repositories/EloquentTagRepository.php
+public function ownedBy(User $user, TagFilter $filter): LengthAwarePaginator
 {
-    public function ownedBy(User $user, TagFilter $filter): LengthAwarePaginator;
+    return $this->ownedTags->handle($user, $filter)->paginate($filter->perPage());
 }
 
-// app/Domain/Tagging/Repositories/EloquentTagRepository.php
-final readonly class EloquentTagRepository implements TagRepositoryInterface
+// Queries/OwnedTagsQuery.php
+public function handle(User $user, TagFilter $filter): Builder
 {
-    public function __construct(private OwnedTagsQuery $ownedTags) {}
-
-    public function ownedBy(User $user, TagFilter $filter): LengthAwarePaginator
-    {
-        return $this->ownedTags->handle($user, $filter)->paginate($filter->perPage());
-    }
+    return Tag::query()
+        ->where('user_id', $user->getKey())
+        ->whereNull('archived_at')
+        ->when($filter->search(), fn (Builder $q, string $term) => $q->where('name', 'like', "{$term}%"))
+        ->orderBy($filter->sortColumn(), $filter->direction()->value);
 }
 
-// app/Domain/Tagging/Queries/OwnedTagsQuery.php
-final readonly class OwnedTagsQuery
-{
-    public function handle(User $user, TagFilter $filter): Builder
-    {
-        return Tag::query()
-            ->where('user_id', $user->getKey())
-            ->whereNull('archived_at')
-            ->when($filter->search(), fn (Builder $q, string $term) => $q->where('name', 'like', "{$term}%"))
-            ->orderBy($filter->sortColumn(), $filter->direction()->value);
-    }
-}
+// The controller is one line.
+return TagResource::collection($tags->ownedBy($request->user(), $request->toFilter()));
 ```
 
-```php
-final class ListTagsController
-{
-    public function __invoke(ListTagsRequest $request, TagRepositoryInterface $tags): AnonymousResourceCollection
-    {
-        return TagResource::collection($tags->ownedBy($request->user(), $request->toFilter()));
-    }
-}
-```
-
-The page size is capped inside `TagFilter`, the sort column is whitelisted inside the Query Class, and the controller is one line. See `rules/query-whitelist-sortable-columns.md` and `rules/gate-eloquent-directly-by-default.md`.
+The page-size cap lives in `TagFilter`, the sort column is whitelisted in the Query Class. See `rules/query-whitelist-sortable-columns.md`.
 
 ---
 
@@ -531,33 +510,25 @@ An Action that needs a second public method is two Actions. Split it.
 
 ## Never Create a Pass-Through Action
 
-If `handle()` forwards its arguments to one collaborator and returns the result unchanged, the Action is a second name for that collaborator. Delete it and let the caller call the collaborator.
+If `handle()` forwards its arguments to one collaborator and returns the result unchanged, the Action is a second name for that collaborator. Delete it; the caller calls the collaborator.
 
-Reads are where this happens most: a list endpoint has no use case to orchestrate, so the controller calls the Repository directly. An Action earns its place when it does at least two of — write state, wrap a transaction, dispatch an event or job, coordinate two or more collaborators, or apply a workflow rule.
+Reads are where this happens most: a list has no use case to orchestrate, so the controller calls the Repository. An Action earns its place when it does at least two of — write state, wrap a transaction, dispatch an event or job, coordinate two collaborators, apply a workflow rule.
 
-**Incorrect (a file whose whole body is a forward):**
+**Incorrect (a class whose whole body is a forward):**
 
 ```php
 final readonly class ListTodosAction
 {
-    public function __construct(private TodoRepository $todos) {}
+    public function __construct(private TodoRepositoryInterface $todos) {}
 
-    public function handle(User $user, TodoFilters $filters): LengthAwarePaginator
+    public function handle(User $user, TodoFilter $filter): LengthAwarePaginator
     {
-        return $this->todos->paginateForUser($user, $filters);
-    }
-}
-
-final class ListTodosController
-{
-    public function __invoke(ListTodosRequest $request, ListTodosAction $action): AnonymousResourceCollection
-    {
-        return TodoResource::collection($action->handle($request->user(), $request->toFilter()));
+        return $this->todos->paginateForUser($user, $filter);
     }
 }
 ```
 
-Two classes, one test each, and the second one asserts that a mock was called.
+Two classes, two tests, and the second one asserts that a mock was called.
 
 **Correct (the read goes straight to its Repository; the Action exists where there is a use case):**
 
@@ -569,13 +540,9 @@ final class ListTodosController
         return TodoResource::collection($todos->paginateForUser($request->user(), $request->toFilter()));
     }
 }
-```
 
-```php
 final readonly class CompleteTodoAction
 {
-    public function __construct(private TodoRepositoryInterface $todos) {}
-
     public function handle(Todo $todo, CarbonImmutable $completedAt): Todo
     {
         return DB::transaction(function () use ($todo, $completedAt): Todo {
@@ -590,7 +557,7 @@ final readonly class CompleteTodoAction
 }
 ```
 
-The same test applies to a Service — see `rules/service-not-a-disguised-repository.md`. For which reads need a Repository at all, see `rules/gate-reads-go-through-a-named-query.md`.
+The same test applies to a Service — see `rules/service-not-a-disguised-repository.md`.
 
 ---
 
@@ -1136,30 +1103,25 @@ $tenant = Tenant::findOrFail($id);
 
 ## An Interface Ships With Its Implementation and Its Binding
 
-A Contract is not a deliverable on its own. Three things land in the same change or none of them do: the interface in `Contracts/`, one implementation in `Repositories/`, and the binding in a service provider.
+Three things land in the same change or none of them do: the interface in `Contracts/`, one implementation in `Repositories/`, and the binding in a service provider.
 
-An interface with an empty `Repositories/` folder compiles, passes static analysis and looks finished. It fails at runtime — `BindingResolutionException: Target [TodoRepositoryInterface] is not instantiable` — on the first request that injects it. Nothing catches it until someone hits the route.
-
-The same rule covers every interface under `Contracts/`: integration contracts, Anti-Corruption Layer ports, notification channels. If you write the method signatures, write the class that satisfies them.
+An interface with an empty `Repositories/` folder compiles, passes static analysis and looks finished. It fails at runtime — `BindingResolutionException: Target [TodoRepositoryInterface] is not instantiable` — on the first request that injects it, and nothing catches it until someone hits the route. The rule covers every interface under `Contracts/`: integration contracts, ACL ports, notification channels.
 
 **Incorrect (a contract with nothing behind it):**
 
 ```php
-// app/Domain/Todo/Contracts/TodoRepositoryInterface.php
 interface TodoRepositoryInterface
 {
     public function paginateForUser(User $user, TodoFilter $filter): LengthAwarePaginator;
-
-    public function completeSubtasksOf(Todo $parent, CarbonImmutable $completedAt): int;
 }
 ```
 
 ```text
-app/Domain/Todo/Repositories/     # empty
-app/Providers/DomainServiceProvider.php   # no binding
+app/Domain/Todo/Repositories/              # empty
+app/Providers/DomainServiceProvider.php    # no binding
 ```
 
-**Correct (contract, implementation and binding in one change):**
+**Correct (contract, implementation and binding together):**
 
 ```php
 // app/Domain/Todo/Repositories/EloquentTodoRepository.php
@@ -1171,30 +1133,13 @@ final readonly class EloquentTodoRepository implements TodoRepositoryInterface
     {
         return $this->openTodos->handle($user, $filter)->paginate($filter->perPage());
     }
-
-    public function completeSubtasksOf(Todo $parent, CarbonImmutable $completedAt): int
-    {
-        return Todo::query()
-            ->where('parent_id', $parent->getKey())
-            ->whereNull('completed_at')
-            ->update(['completed_at' => $completedAt]);
-    }
 }
-```
 
-```php
 // app/Providers/DomainServiceProvider.php
-public function register(): void
-{
-    $this->app->bind(TodoRepositoryInterface::class, EloquentTodoRepository::class);
-}
-```
+$this->app->bind(TodoRepositoryInterface::class, EloquentTodoRepository::class);
 
-```php
-// One test per contract keeps an unbound interface from reaching production.
-it('resolves every domain contract', function () {
-    expect(app(TodoRepositoryInterface::class))->toBeInstanceOf(EloquentTodoRepository::class);
-});
+// One test per contract keeps an unbound interface out of production.
+expect(app(TodoRepositoryInterface::class))->toBeInstanceOf(EloquentTodoRepository::class);
 ```
 
 If you cannot name the implementation yet, you have not passed the gate — see `rules/gate-repository-earns-its-name.md` and keep the calls on Eloquent until you can.
@@ -2190,22 +2135,20 @@ A Value Object with no preset family may sit at the `Filters/` root (`Sorting.ph
 
 ## A Shared Module Owns the Mechanism, Not Other Domains' Messages
 
-When a cross-cutting concern gets its own domain — Notifications, Reporting, Search, Export — draw the line once: **the shared domain owns the mechanism, each business domain owns the content that describes its own data.**
+When a cross-cutting concern gets its own domain — Notification, Reporting, Search, Export — draw the line once: **the shared domain owns the mechanism, each business domain owns the content describing its own data.**
 
-The test is what the class reads. `TodoCompletedNotification` reads a Todo's title and completion time and changes whenever Todo does, so it belongs to `Domain/Todo/Notifications/`. Delivery preferences, channel routing, the unread feed and its endpoints belong to `Domain/Notification/`. A class placed on the wrong side either imports another domain's Models (forbidden — see `rules/domain-no-cross-domain-models.md`) or splits one concept across two folders so every change touches both.
+The test is what the class reads. `TodoCompletedNotification` reads a Todo's title and completion time, so it belongs to `Domain/Todo/Notifications/`. Preferences, channel routing, the unread feed and its endpoints belong to `Domain/Notification/`. Placed on the wrong side, a class either imports another domain's Models (see `rules/domain-no-cross-domain-models.md`) or splits one concept so every change touches both folders.
 
-If the shared domain would contain nothing but other domains' messages, do not create it. Put the classes in their domains and stop.
+If the shared domain would hold nothing but other domains' messages, do not create it.
 
-**Incorrect (the shared domain reaches into Todo, and Todo keeps a copy of the concept anyway):**
+**Incorrect (the shared domain reaches into Todo, and Todo keeps a copy anyway):**
 
 ```text
-app/Domain/Notification/
-  Notifications/
-    TodoCompletedNotification.php   # use App\Domain\Todo\Models\Todo;  ← cross-domain import
-    InvoicePaidNotification.php     # use App\Domain\Billing\Models\Invoice;
-app/Domain/Todo/
-  Notifications/
-    TodoCompletedNotification.php   # same idea, second home
+app/Domain/Notification/Notifications/
+  TodoCompletedNotification.php   # use App\Domain\Todo\Models\Todo;  ← cross-domain import
+  InvoicePaidNotification.php     # use App\Domain\Billing\Models\Invoice;
+app/Domain/Todo/Notifications/
+  TodoCompletedNotification.php   # same idea, second home
 ```
 
 Renaming a Todo column now breaks a class in another bounded context, and nobody can say where the next notification goes.
@@ -2213,60 +2156,29 @@ Renaming a Todo column now breaks a class in another bounded context, and nobody
 **Correct (mechanism on one side, messages on the other):**
 
 ```text
-app/Domain/Notification/           the mechanism
-  Contracts/
-    NotificationPreferences.php
-  Http/Controllers/
-    ListNotificationsController.php
-    MarkNotificationReadController.php
-  Repositories/
-    EloquentNotificationRepository.php
-  Resources/
-    NotificationResource.php
-  Channels/
-    PushChannel.php
+app/Domain/Notification/          the mechanism
+  Contracts/NotificationPreferences.php
+  Http/Controllers/ListNotificationsController.php
+  Repositories/EloquentNotificationRepository.php
+  Resources/NotificationResource.php
+  Channels/PushChannel.php
 
-app/Domain/Todo/                   the message, next to the data it describes
-  Notifications/
-    TodoCompletedNotification.php
-  Events/
-    TodoCompleted.php
+app/Domain/Todo/                  the message, next to the data it describes
+  Notifications/TodoCompletedNotification.php
+  Events/TodoCompleted.php
 ```
 
 ```php
 namespace App\Domain\Todo\Notifications;
 
-/**
- * Database-only payload. Dispatched from an already-queued listener, so it
- * deliberately does not implement ShouldQueue itself.
- */
-final class TodoCompletedNotification extends Notification
+// The message reaches the mechanism through its published contract:
+public function via(NotificationPreferences $notifiable): array
 {
-    public function __construct(
-        private readonly int $todoId,
-        private readonly string $title,
-        private readonly CarbonImmutable $completedAt,
-    ) {}
-
-    /** @return list<string> */
-    public function via(NotificationPreferences $notifiable): array
-    {
-        return $notifiable->channelsFor('todo.completed');   // contract published by Domain/Notification
-    }
-
-    /** @return array<string, mixed> */
-    public function toArray(object $notifiable): array
-    {
-        return [
-            'todo_id' => $this->todoId,
-            'title' => $this->title,
-            'completed_at' => $this->completedAt->toIso8601String(),
-        ];
-    }
+    return $notifiable->channelsFor('todo.completed');
 }
 ```
 
-Todo depends on the Notification domain's published contract, never the reverse. The same split applies to Reporting (owns scheduling and rendering, not each domain's report definitions) and Export (owns the writer and the download, not each domain's row mapper).
+Todo depends on the Notification domain's contract, never the reverse. Same split for Reporting (owns scheduling and rendering, not each domain's report definitions) and Export (owns the writer, not the row mappers).
 
 ---
 

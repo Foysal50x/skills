@@ -7,6 +7,10 @@ import { join } from 'node:path'
 import { SKILLS_DIR, listSkills, listRules, parseSections, splitFrontmatter, parseFrontmatter } from './lib.mjs'
 
 const SKILL_MD_MAX_LINES = 500
+// A rule is read on demand, so its cost is paid every time an agent opens it.
+// ~2500 chars ≈ 600 tokens: statement, rationale, one incorrect and one correct example.
+const RULE_MAX_CHARS = 2500
+const RULE_WARN_CHARS = 2200
 const IMPACTS = new Set(['CRITICAL', 'HIGH', 'MEDIUM-HIGH', 'MEDIUM', 'LOW-MEDIUM', 'LOW'])
 
 const errors = []
@@ -77,6 +81,12 @@ for (const skill of skills) {
     }
     if (!body.includes('**Incorrect')) warn(`${where}: no "**Incorrect" example`)
     if (!body.includes('**Correct')) warn(`${where}: no "**Correct" example`)
+
+    if (source.length > RULE_MAX_CHARS) {
+      fail(`${where}: ${source.length} chars (budget ${RULE_MAX_CHARS}) — cut prose or an example`)
+    } else if (source.length > RULE_WARN_CHARS) {
+      warn(`${where}: ${source.length} chars, approaching the ${RULE_MAX_CHARS} budget`)
+    }
 
     for (const [, target] of body.matchAll(/`rules\/([a-z0-9-]+)\.md`/g)) {
       if (!slugs.has(target)) fail(`${where}: cross-reference to unknown rule "${target}"`)

@@ -50,6 +50,18 @@ Always run `npm run check` before committing. CI fails if `AGENTS.md` is stale.
 - Body: an `## {title}` heading matching the frontmatter exactly, one or two sentences of rationale, then `**Incorrect (...):**` and `**Correct (...):**` code blocks.
 - Cross-reference sibling rules as `` `rules/{slug}.md` `` — the validator checks these resolve.
 - Every rule slug must appear in its `SKILL.md` Quick Reference, in backticks.
+- **Size budget: 2500 characters (~600 tokens).** The validator errors above it and warns from 2200. One rule, one or two sentences of rationale, one incorrect and one correct example — nothing else. Needing more means it is two rules, or the detail belongs in `references/`.
+
+### Token cost model
+
+A rule is read on demand, so its length is paid on every read. Keep the load path cheap:
+
+| File | Cost | When it is read |
+|------|------|-----------------|
+| `SKILL.md` | 1.3–2.6k tokens | Every time the skill triggers — keep the Quick Reference sufficient for most questions |
+| `rules/{slug}.md` | ~400 tokens | One or two per task |
+| `references/*.md` | 1–2k tokens | Only when a rule points at one |
+| `AGENTS.md` | 8–22k tokens | Agents that read the AGENTS.md convention. Never load it when the rule files are reachable |
 
 ### Writing style
 

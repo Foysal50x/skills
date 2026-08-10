@@ -110,14 +110,19 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~408 tokens each):
 
 ```
 rules/route-scoped-bindings-for-nested-resources.md
 rules/resource-when-loaded-for-relations.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~12k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 

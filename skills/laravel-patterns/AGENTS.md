@@ -75,6 +75,8 @@ Q4 of the Decision Gate, and the default answer whenever Q4 and Q5 feel ambiguou
 
 A Repository over Eloquent does not fully decouple you from Eloquent anyway: relationships, accessors and scopes remain. That is acceptable and expected. Do not chase purity.
 
+"Directly" names the layer, not the file. Eloquent may be called from an Action, a Repository implementation or a Query Class — never from a Controller, a Form Request, a Resource, a Blade view or a Middleware. And it does not cover list endpoints: a paginated, filtered or ownership-scoped list is a named query, not simple CRUD. See `rules/gate-reads-go-through-a-named-query.md`.
+
 **Incorrect (a layer that only forwards):**
 
 ```php
@@ -164,6 +166,62 @@ final readonly class EloquentChatRepository implements ChatRepositoryInterface
 ```
 
 See `rules/query-internal-to-repositories.md` for the enforcement boundary.
+
+---
+
+## A List Endpoint Is a Named Query
+
+Q4 ("Eloquent directly") covers single-record work: `find()`, a route-bound model, `create()`, `$model->update()`. It does not cover a list.
+
+A paginated list always carries rules — an ownership constraint, a default ordering, a page-size cap, optional filters, an allow-list of sortable columns. That is Q5(b): a Repository method with a Query Class behind it. Deciding this per endpoint is what produces one domain with a Repository and the next with `Model::query()` in a controller.
+
+**Incorrect (a list assembled at the edge because it looked simple):**
+
+```php
+final class ListTagsController
+{
+    public function __invoke(Request $request): AnonymousResourceCollection
+    {
+        $tags = Tag::query()
+            ->where('user_id', $request->user()->id)
+            ->orderBy('name')
+            ->paginate(50);
+
+        return TagResource::collection($tags);
+    }
+}
+```
+
+Ownership, ordering and page size now live in a controller. The export, the picker and the admin screen each copy all three, and the day tags gain `archived_at` three files need the same `where`.
+
+**Correct (the rules live in one named query):**
+
+```php
+// Contracts/TagRepositoryInterface.php — Trigger: Q5(b), the owned-tag list
+// drives the index endpoint, the picker and the CSV export.
+public function ownedBy(User $user, TagFilter $filter): LengthAwarePaginator;
+
+// Repositories/EloquentTagRepository.php
+public function ownedBy(User $user, TagFilter $filter): LengthAwarePaginator
+{
+    return $this->ownedTags->handle($user, $filter)->paginate($filter->perPage());
+}
+
+// Queries/OwnedTagsQuery.php
+public function handle(User $user, TagFilter $filter): Builder
+{
+    return Tag::query()
+        ->where('user_id', $user->getKey())
+        ->whereNull('archived_at')
+        ->when($filter->search(), fn (Builder $q, string $term) => $q->where('name', 'like', "{$term}%"))
+        ->orderBy($filter->sortColumn(), $filter->direction()->value);
+}
+
+// The controller is one line.
+return TagResource::collection($tags->ownedBy($request->user(), $request->toFilter()));
+```
+
+The page-size cap lives in `TagFilter`, the sort column is whitelisted in the Query Class. See `rules/query-whitelist-sortable-columns.md`.
 
 ---
 
@@ -447,6 +505,59 @@ app/Domain/Orders/Actions/
 ```
 
 An Action that needs a second public method is two Actions. Split it.
+
+---
+
+## Never Create a Pass-Through Action
+
+If `handle()` forwards its arguments to one collaborator and returns the result unchanged, the Action is a second name for that collaborator. Delete it; the caller calls the collaborator.
+
+Reads are where this happens most: a list has no use case to orchestrate, so the controller calls the Repository. An Action earns its place when it does at least two of — write state, wrap a transaction, dispatch an event or job, coordinate two collaborators, apply a workflow rule.
+
+**Incorrect (a class whose whole body is a forward):**
+
+```php
+final readonly class ListTodosAction
+{
+    public function __construct(private TodoRepositoryInterface $todos) {}
+
+    public function handle(User $user, TodoFilter $filter): LengthAwarePaginator
+    {
+        return $this->todos->paginateForUser($user, $filter);
+    }
+}
+```
+
+Two classes, two tests, and the second one asserts that a mock was called.
+
+**Correct (the read goes straight to its Repository; the Action exists where there is a use case):**
+
+```php
+final class ListTodosController
+{
+    public function __invoke(ListTodosRequest $request, TodoRepositoryInterface $todos): AnonymousResourceCollection
+    {
+        return TodoResource::collection($todos->paginateForUser($request->user(), $request->toFilter()));
+    }
+}
+
+final readonly class CompleteTodoAction
+{
+    public function handle(Todo $todo, CarbonImmutable $completedAt): Todo
+    {
+        return DB::transaction(function () use ($todo, $completedAt): Todo {
+            $todo = $this->todos->markCompleted($todo, $completedAt);
+            $this->todos->completeSubtasksOf($todo, $completedAt);
+
+            TodoCompleted::dispatch($todo->getKey(), $completedAt);
+
+            return $todo;
+        });
+    }
+}
+```
+
+The same test applies to a Service — see `rules/service-not-a-disguised-repository.md`.
 
 ---
 
@@ -987,6 +1098,51 @@ interface OrderRepositoryInterface
 // Tenant did not. Use Eloquent:
 $tenant = Tenant::findOrFail($id);
 ```
+
+---
+
+## An Interface Ships With Its Implementation and Its Binding
+
+Three things land in the same change or none of them do: the interface in `Contracts/`, one implementation in `Repositories/`, and the binding in a service provider.
+
+An interface with an empty `Repositories/` folder compiles, passes static analysis and looks finished. It fails at runtime — `BindingResolutionException: Target [TodoRepositoryInterface] is not instantiable` — on the first request that injects it, and nothing catches it until someone hits the route. The rule covers every interface under `Contracts/`: integration contracts, ACL ports, notification channels.
+
+**Incorrect (a contract with nothing behind it):**
+
+```php
+interface TodoRepositoryInterface
+{
+    public function paginateForUser(User $user, TodoFilter $filter): LengthAwarePaginator;
+}
+```
+
+```text
+app/Domain/Todo/Repositories/              # empty
+app/Providers/DomainServiceProvider.php    # no binding
+```
+
+**Correct (contract, implementation and binding together):**
+
+```php
+// app/Domain/Todo/Repositories/EloquentTodoRepository.php
+final readonly class EloquentTodoRepository implements TodoRepositoryInterface
+{
+    public function __construct(private OpenTodosQuery $openTodos) {}
+
+    public function paginateForUser(User $user, TodoFilter $filter): LengthAwarePaginator
+    {
+        return $this->openTodos->handle($user, $filter)->paginate($filter->perPage());
+    }
+}
+
+// app/Providers/DomainServiceProvider.php
+$this->app->bind(TodoRepositoryInterface::class, EloquentTodoRepository::class);
+
+// One test per contract keeps an unbound interface out of production.
+expect(app(TodoRepositoryInterface::class))->toBeInstanceOf(EloquentTodoRepository::class);
+```
+
+If you cannot name the implementation yet, you have not passed the gate — see `rules/gate-repository-earns-its-name.md` and keep the calls on Eloquent until you can.
 
 ---
 
@@ -1977,6 +2133,55 @@ A Value Object with no preset family may sit at the `Filters/` root (`Sorting.ph
 
 ---
 
+## A Shared Module Owns the Mechanism, Not Other Domains' Messages
+
+When a cross-cutting concern gets its own domain — Notification, Reporting, Search, Export — draw the line once: **the shared domain owns the mechanism, each business domain owns the content describing its own data.**
+
+The test is what the class reads. `TodoCompletedNotification` reads a Todo's title and completion time, so it belongs to `Domain/Todo/Notifications/`. Preferences, channel routing, the unread feed and its endpoints belong to `Domain/Notification/`. Placed on the wrong side, a class either imports another domain's Models (see `rules/domain-no-cross-domain-models.md`) or splits one concept so every change touches both folders.
+
+If the shared domain would hold nothing but other domains' messages, do not create it.
+
+**Incorrect (the shared domain reaches into Todo, and Todo keeps a copy anyway):**
+
+```text
+app/Domain/Notification/Notifications/
+  TodoCompletedNotification.php   # use App\Domain\Todo\Models\Todo;  ← cross-domain import
+  InvoicePaidNotification.php     # use App\Domain\Billing\Models\Invoice;
+app/Domain/Todo/Notifications/
+  TodoCompletedNotification.php   # same idea, second home
+```
+
+Renaming a Todo column now breaks a class in another bounded context, and nobody can say where the next notification goes.
+
+**Correct (mechanism on one side, messages on the other):**
+
+```text
+app/Domain/Notification/          the mechanism
+  Contracts/NotificationPreferences.php
+  Http/Controllers/ListNotificationsController.php
+  Repositories/EloquentNotificationRepository.php
+  Resources/NotificationResource.php
+  Channels/PushChannel.php
+
+app/Domain/Todo/                  the message, next to the data it describes
+  Notifications/TodoCompletedNotification.php
+  Events/TodoCompleted.php
+```
+
+```php
+namespace App\Domain\Todo\Notifications;
+
+// The message reaches the mechanism through its published contract:
+public function via(NotificationPreferences $notifiable): array
+{
+    return $notifiable->channelsFor('todo.completed');
+}
+```
+
+Todo depends on the Notification domain's contract, never the reverse. Same split for Reporting (owns scheduling and rendering, not each domain's report definitions) and Export (owns the writer, not the row mappers).
+
+---
+
 # 8. Inter-Domain Communication
 
 **Impact: HIGH**
@@ -2462,5 +2667,7 @@ CHAT_VECTOR_SEARCH=true
 ```
 
 Cast in the config file, not at the call site — `config('chat.vector_search')` should already be a bool.
+
+A secret read from config still leaks the moment it becomes a function argument: PHP writes every argument into stack traces. Mark those parameters `#[\SensitiveParameter]` — see the `laravel-rest-api` skill's `error-sensitive-parameter-attribute` rule — and never pass one into a queued job's constructor.
 
 ---

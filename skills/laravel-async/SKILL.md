@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Async
 
-Rules for work that happens outside the request: 28 rules across 5 sections.
+Rules for work that happens outside the request: 29 rules across 5 sections.
 
 Two assumptions run through all of them:
 
@@ -25,6 +25,28 @@ Two assumptions run through all of them:
 - A queue is backing up, or failures are going unnoticed
 - Adding caching, or debugging stale or cross-tenant cached data
 - Configuring queue connections, Horizon supervisors or the scheduler
+
+## Pick the Rule
+
+| About to write | Read |
+|----------------|------|
+| Slow or external work inside a request | `job-queue-slow-work`, `job-retries-and-backoff` |
+| A job constructor | `job-serialize-ids-not-models`, `job-never-serialize-secrets` |
+| A handler that may run twice | `job-idempotent-handlers` |
+| Something that must happen after a write | `event-emit-for-side-effects`, `event-dispatch-after-commit` |
+| A listener that sends mail or calls an API | `event-queue-side-effecting-listeners` |
+| Caching an expensive read | `cache-read-heavy-endpoints`, `cache-stable-key-convention` |
+| A fix for stale or cross-tenant cached data | `cache-invalidate-on-model-events`, `cache-tags-for-related-data` |
+| A scheduler entry | `schedule-queue-work-not-inline`, `schedule-prevent-overlapping` |
+| A fix for duplicate dispatches | `job-unique-jobs` |
+
+## Before You Write Code
+
+- Every API named in these rules is verified against Laravel `^12.0 || ^13.0` and PHP `^8.3`. If you need something these rules do not name, check the docs — never infer an API from its name.
+- Version-gated APIs are marked inline ("Laravel 13 only"). Read the project's `composer.json` first; on Laravel 12 use the fallback the rule gives.
+- Where the project already differs from a rule, follow the project. Name the rule you set aside and why, rather than half-converting the codebase.
+- When two rules collide, the higher-impact section wins — sections are ordered by impact.
+- One example is not the whole rule. Open `rules/{slug}.md` before adapting it to a case the example does not show.
 
 ## Rule Sections by Priority
 
@@ -44,6 +66,7 @@ Two assumptions run through all of them:
 - `job-queue-slow-work` — Queue anything slow or externally dependent
 - `job-retries-and-backoff` — Set tries, backoff and timeout on every job
 - `job-serialize-ids-not-models` — Pass identifiers, not object graphs
+- `job-never-serialize-secrets` — A credential never enters a job payload
 - `job-unique-jobs` — Collapse duplicate dispatches with `ShouldBeUnique`
 - `job-batches-and-chains` — Batches for fan-out, chains for ordered steps
 - `job-handle-failure-explicitly` — Decide what happens after the last attempt
@@ -108,18 +131,23 @@ Two assumptions run through all of them:
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~397 tokens each):
 
 ```
 rules/job-idempotent-handlers.md
 rules/cache-invalidate-on-model-events.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~11k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 
 - `laravel-patterns` — where events, listeners and their contracts live across domains
 - `laravel-eloquent` — transactions, `after_commit` and bulk writes that skip observers
-- `laravel-http` — returning 202 and a pollable resource instead of blocking
+- `laravel-rest-api` — returning 202 and a pollable resource instead of blocking
 - `laravel-testing` — `Queue::fake()`, `Bus::fake()`, `Event::fake()` and testing idempotency

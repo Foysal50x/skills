@@ -14,7 +14,7 @@ Or as part of the Claude Code plugin:
 
 ```
 /plugin marketplace add Foysal50x/skills
-/plugin install laravel-skills@foysal50x
+/plugin install laravel-skill@foysal50x
 ```
 
 ## Contents

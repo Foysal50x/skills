@@ -1,6 +1,6 @@
 ---
-name: laravel-http
-description: HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Use when writing or reviewing routes, controllers, form requests, API resources, policies or exception handling in a Laravel application.
+name: laravel-rest-api
+description: REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Use when writing or reviewing routes, controllers, form requests, API resources, policies or exception handling in a Laravel application.
 license: MIT
 metadata:
   author: Foysal Ahmed
@@ -11,9 +11,15 @@ metadata:
 
 # Laravel HTTP
 
-Rules for the edge of a Laravel application: 29 rules across 6 sections.
+Rules for the edge of a Laravel application: 31 rules across 6 sections.
 
 The edge has one job — translate HTTP into domain types and back. `Illuminate\Http\Request` stops at the controller or Form Request; nothing inward ever sees it. See the `laravel-patterns` skill for what happens after that.
+
+## Non-Negotiables
+
+- Exactly one authorization site per route. Never a Form Request `authorize()` and a controller `Gate::authorize()` on the same route.
+- No query construction in a controller, Form Request, Resource or Blade view — including a single `where()` with `paginate()`, and including relations read off `$request->user()`.
+- Any parameter carrying a password, token, key or raw personal data is marked `#[\SensitiveParameter]`.
 
 ## When to Apply
 
@@ -22,6 +28,28 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - Deciding where an authorization check goes
 - Turning a domain exception into an HTTP response
 - Reviewing an API payload shape before clients depend on it
+
+## Pick the Rule
+
+| About to write | Read |
+|----------------|------|
+| Any new endpoint | `authz-exactly-one-authorization-site`, `controller-thin-delegates-to-action` |
+| Validation for a payload | `request-validation-in-form-requests`, `request-to-dto` |
+| An ownership or tenancy check | `authz-policies-per-model`, `authz-never-trust-request-ids` |
+| An endpoint that lists records | `controller-no-query-construction` |
+| A nested resource URL | `route-scoped-bindings-for-nested-resources`, `route-shallow-nesting` |
+| A JSON response | `resource-json-resource-only`, `resource-when-loaded-for-relations` |
+| A `throw` | `error-context-specific-exception-classes`, `error-map-status-centrally` |
+| A function taking a password, token or key | `error-sensitive-parameter-attribute` |
+| A route file entry | `route-model-binding-over-manual-lookup`, `route-cacheable-controller-routes` |
+
+## Before You Write Code
+
+- Every API named in these rules is verified against Laravel `^12.0 || ^13.0` and PHP `^8.3`. If you need something these rules do not name, check the docs — never infer an API from its name.
+- Version-gated APIs are marked inline ("Laravel 13 only"). Read the project's `composer.json` first; on Laravel 12 use the fallback the rule gives.
+- Where the project already differs from a rule, follow the project. Name the rule you set aside and why, rather than half-converting the codebase.
+- When two rules collide, the higher-impact section wins — sections are ordered by impact.
+- One example is not the whole rule. Open `rules/{slug}.md` before adapting it to a case the example does not show.
 
 ## Rule Sections by Priority
 
@@ -39,6 +67,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 ### 1. Authorization (CRITICAL)
 
 - `authz-check-before-the-domain-runs` — Authorize at the edge, before the Action executes
+- `authz-exactly-one-authorization-site` — One authorization site per route, never two
 - `authz-policies-per-model` — Put the rule in a Policy, not in a conditional
 - `authz-never-trust-request-ids` — An ID in a request is a claim, not a fact
 
@@ -75,6 +104,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - `error-named-constructors` — A named constructor per failure mode
 - `error-map-status-centrally` — Map exceptions to status once, in the handler
 - `error-never-leak-internals` — Log the detail, return a stable message
+- `error-sensitive-parameter-attribute` — Mark secret parameters `#[\SensitiveParameter]`
 
 ### 6. Controllers (MEDIUM-HIGH)
 
@@ -91,6 +121,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 | First-party JSON:API resources | Laravel 13+ |
 | `PreventRequestForgery` (origin-aware CSRF) | Laravel 13+ |
 | `->scopeBindings()`, `->missing()` | Laravel 9+ |
+| `#[\SensitiveParameter]` | PHP 8.2+ |
 | `bootstrap/app.php` exception configuration | Laravel 11+ |
 
 ## Reference Material
@@ -101,14 +132,19 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~408 tokens each):
 
 ```
 rules/route-scoped-bindings-for-nested-resources.md
 rules/resource-when-loaded-for-relations.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~12k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 

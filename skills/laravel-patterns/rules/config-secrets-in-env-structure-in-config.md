@@ -43,3 +43,5 @@ CHAT_VECTOR_SEARCH=true
 ```
 
 Cast in the config file, not at the call site — `config('chat.vector_search')` should already be a bool.
+
+A secret read from config still leaks the moment it becomes a function argument: PHP writes every argument into stack traces. Mark those parameters `#[\SensitiveParameter]` — see the `laravel-rest-api` skill's `error-sensitive-parameter-attribute` rule — and never pass one into a queued job's constructor.

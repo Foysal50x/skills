@@ -1,20 +1,20 @@
-# laravel-http
+# laravel-rest-api
 
 The HTTP edge: authorization, Form Requests and DTOs, scoped route model binding, API Resources, and exception-to-status mapping.
 
-29 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+31 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 
 ```bash
-npx skills add Foysal50x/skills --skill laravel-http
+npx skills add Foysal50x/skills --skill laravel-rest-api
 ```
 
 Or as part of the Claude Code plugin:
 
 ```
 /plugin marketplace add Foysal50x/skills
-/plugin install laravel-skills@foysal50x
+/plugin install laravel-skill@foysal50x
 ```
 
 ## Contents

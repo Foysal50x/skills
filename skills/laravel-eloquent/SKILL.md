@@ -23,6 +23,29 @@ Assumes the layering from the `laravel-patterns` skill: **all query construction
 - Writing an import, export, backfill or reporting query
 - Adding a scope, global scope or soft deletes to a model
 
+## Pick the Rule
+
+| About to write | Read |
+|----------------|------|
+| A query that reads relations | `perf-eager-load-every-touched-relation`, `perf-prevent-lazy-loading` |
+| A query returning many rows | `paginate-always-paginate-lists`, `paginate-cursor-for-deep-pagination` |
+| A new model | `model-cast-every-column`, `model-final-and-typed`, `model-minimal-fillable` |
+| A write touching more than one table | `tx-wrap-multi-step-writes`, `tx-keep-transactions-short` |
+| Raw SQL or a database expression | `raw-never-interpolate-user-input`, `raw-only-inside-query-classes` |
+| An update or insert over many rows | `bulk-update-bypasses-events`, `bulk-upsert-instead-of-loop` |
+| A filter used by several queries | `scope-query-scopes-for-reusable-filters` |
+| An existence check | `perf-exists-not-count` |
+| A pass over a large table | `perf-chunk-large-result-sets`, `bulk-lazy-by-id-for-huge-sets` |
+| A slow endpoint to diagnose | `perf-index-filtered-columns`, `perf-avoid-wherehas-on-hot-paths` |
+
+## Before You Write Code
+
+- Every API named in these rules is verified against Laravel `^12.0 || ^13.0` and PHP `^8.3`. If you need something these rules do not name, check the docs — never infer an API from its name.
+- Version-gated APIs are marked inline ("Laravel 13 only"). Read the project's `composer.json` first; on Laravel 12 use the fallback the rule gives.
+- Where the project already differs from a rule, follow the project. Name the rule you set aside and why, rather than half-converting the codebase.
+- When two rules collide, the higher-impact section wins — sections are ordered by impact.
+- One example is not the whole rule. Open `rules/{slug}.md` before adapting it to a case the example does not show.
+
 ## Rule Sections by Priority
 
 | # | Section | Impact | Prefix |
@@ -114,18 +137,23 @@ All three are used **inside Query Classes and Repositories only**. Drop to raw e
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~366 tokens each):
 
 ```
 rules/perf-eager-load-every-touched-relation.md
 rules/tx-dispatch-after-commit.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~12k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 
 - `laravel-patterns` — where the query goes: Query Class, Repository, Action or inline
-- `laravel-http` — pagination and resources at the HTTP edge
+- `laravel-rest-api` — pagination and resources at the HTTP edge
 - `laravel-async` — caching query results and invalidating on model events
 - `laravel-testing` — testing query rules against a real database

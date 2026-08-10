@@ -36,6 +36,28 @@ The organizing idea: **each layer has one test style that fits it.** Testing an 
 | Controller / route | Feature test | Usually | Status, payload, authorization |
 | Job / Listener | Unit handler, faked dispatch | Depends | Idempotency and effects |
 
+## Pick the Rule
+
+| About to write | Read |
+|----------------|------|
+| A test for anything at all | `strategy-layer-to-test-type`, `strategy-test-your-rules-not-the-framework` |
+| A test that needs a Repository | `fake-repository-anonymous-class`, `fake-never-mock-eloquent` |
+| A test for a Query Class | `db-refresh-database-and-factories`, `db-assert-inclusion-and-exclusion` |
+| A test for ordering or defaults | `db-test-ordering-and-defaults` |
+| A test for an endpoint | `http-assert-payload-shape`, `http-assert-authorization` |
+| A test that a job or event fired | `http-assert-side-effects-dispatched`, `fake-framework-facades` |
+| A test involving dates or randomness | `fake-time-and-randomness` |
+| A test for a Value Object | `vo-test-predicates-directly`, `vo-never-hand-a-builder` |
+| A test that feels pointless to write | `strategy-if-testing-feels-silly` |
+
+## Before You Write Code
+
+- Every API named in these rules is verified against Laravel `^12.0 || ^13.0` and PHP `^8.3`. If you need something these rules do not name, check the docs — never infer an API from its name.
+- Version-gated APIs are marked inline ("Laravel 13 only"). Read the project's `composer.json` first; on Laravel 12 use the fallback the rule gives.
+- Where the project already differs from a rule, follow the project. Name the rule you set aside and why, rather than half-converting the codebase.
+- When two rules collide, the higher-impact section wins — sections are ordered by impact.
+- One example is not the whole rule. Open `rules/{slug}.md` before adapting it to a case the example does not show.
+
 ## Rule Sections by Priority
 
 | # | Section | Impact | Prefix |
@@ -112,18 +134,23 @@ SQLite differs from MySQL and Postgres on JSON operators, full-text search, lock
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~465 tokens each):
 
 ```
 rules/fake-repository-anonymous-class.md
 rules/db-assert-inclusion-and-exclusion.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~8k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 
 - `laravel-patterns` — the layers these tests are organized around
 - `laravel-eloquent` — the query rules the database tests assert
-- `laravel-http` — the endpoints the feature tests cover
+- `laravel-rest-api` — the endpoints the feature tests cover
 - `laravel-async` — testing idempotency, batches and cache invalidation

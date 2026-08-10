@@ -43,4 +43,6 @@ final class SendOrderConfirmation implements ShouldQueue
 }
 ```
 
+Credentials are the strict version of the same rule: they never enter a payload at all, whatever their size — see `rules/job-never-serialize-secrets.md`.
+
 Always handle the missing-row case. Between dispatch and execution the record can be deleted, and `findOrFail()` there means a failed job for something that is not a failure. Alternatively add `#[DeleteWhenMissingModels]` (or `public bool $deleteWhenMissingModels = true`).

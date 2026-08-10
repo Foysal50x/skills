@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Patterns
 
-Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 55 rules across 9 sections.
+Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 59 rules across 9 sections.
 
 **Core philosophy: practicality over purity. Never take a greedy decision.**
 
@@ -43,12 +43,62 @@ Run the Decision Gate before writing any class: `references/decision-gate.md`.
 Q1. Single end-to-end use case?              → ACTION
 Q2. Called by 2+ Actions, or worth isolating? → SERVICE
 Q3. Used in only one Action?                  → KEEP IT IN THE ACTION
-Q4. Simple CRUD / one-off query?              → ELOQUENT DIRECTLY
+Q4. Single-record CRUD (find / create /
+    update / delete)?                         → ELOQUENT DIRECTLY
+                                                (from an Action or Repository)
 Q5. Backend may swap, OR the query earns a
     name and its own tests?                   → REPOSITORY (+ Query Classes)
 ```
 
-Ambiguous between Q4 and Q5? Choose Q4.
+Ambiguous between Q4 and Q5? Choose Q4 — except for a list endpoint, which is always Q5.
+
+## Non-Negotiables
+
+These are the mistakes that survive review because each one looks locally reasonable:
+
+- Query construction never appears in a Controller, Form Request, Resource, Blade view or Middleware — however small the query is.
+- A paginated, filtered or ownership-scoped list is a named query behind a Repository, not "simple CRUD".
+- An Action that only forwards to one collaborator is deleted; the caller calls the collaborator.
+- An interface, its implementation and its container binding land in the same change. Never an empty `Repositories/`.
+- One concept has one home: a shared module owns the mechanism, each domain owns the content describing its own data.
+- Every route is authorized in exactly one place — see the `laravel-rest-api` skill.
+
+## Pick the Rule
+
+| About to write | Read |
+|----------------|------|
+| Any new class under `app/Domain/` | `gate-run-decision-gate-first` |
+| An index / list / search endpoint | `gate-reads-go-through-a-named-query`, `query-whitelist-sortable-columns` |
+| A create, update or delete use case | `gate-action-for-use-case`, `action-one-use-case-end-to-end` |
+| An Action that only calls one thing | `action-not-a-pass-through` |
+| A Repository interface | `gate-repository-earns-its-name`, `repo-ship-implementation-and-binding` |
+| A query with filters, sorting or eager loads | `query-owns-all-query-construction`, `query-single-handle-method` |
+| Logic a second Action now needs | `gate-service-only-when-reused` |
+| A method with more than four parameters | `vo-more-than-four-params`, `vo-group-related-parameters` |
+| Code that touches another domain | `domain-no-cross-domain-models`, `domain-events-for-reactions` |
+| A notification, report or export class | `layout-shared-module-owns-mechanism` |
+| Anything reading configuration | `config-never-env-outside-config` |
+| A file you cannot place | `layout-scope-based-co-location` |
+
+## Build Order
+
+A vertical slice lands in this order — each step exists only if the step above it earned it:
+
+1. `Contracts/<X>RepositoryInterface.php` — the Q5 trigger named in the docblock
+2. `Queries/<BusinessQuestion>Query.php` — one `handle()`, all clauses
+3. `Repositories/Eloquent<X>Repository.php` — implements the interface
+4. the binding in `DomainServiceProvider` — same change, never later
+5. `Actions/<Verb><Noun>Action.php` — only when state changes
+6. the edge: Form Request → Controller → Resource (`laravel-rest-api`)
+7. tests per layer (`laravel-testing`)
+
+## Before You Write Code
+
+- Every API named in these rules is verified against Laravel `^12.0 || ^13.0` and PHP `^8.3`. If you need something these rules do not name, check the docs — never infer an API from its name.
+- Version-gated APIs are marked inline ("Laravel 13 only"). Read the project's `composer.json` first; on Laravel 12 use the fallback the rule gives.
+- Where the project already differs from a rule, follow the project. Name the rule you set aside and why, rather than half-converting the codebase.
+- When two rules collide, the higher-impact section wins — sections are ordered by impact.
+- One example is not the whole rule. Open `rules/{slug}.md` before adapting it to a case the example does not show.
 
 ## Rule Sections by Priority
 
@@ -74,6 +124,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `gate-eloquent-directly-by-default` — Use Eloquent directly by default
 - `gate-repository-earns-its-name` — A Repository must name its trigger
 - `gate-query-class-and-repository-together` — Query Classes and Repositories arrive together
+- `gate-reads-go-through-a-named-query` — A list endpoint is a named query
 
 ### 2. Actions (HIGH)
 
@@ -81,6 +132,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `action-keep-single-use-logic-inline` — Keep single-use logic inside the Action
 - `action-naming-verb-noun` — Name Actions `<Verb><Noun>Action`
 - `action-maps-request-to-value-objects` — Map HTTP input to domain types at the edge
+- `action-not-a-pass-through` — Never create an Action that only forwards
 
 ### 3. Services (HIGH)
 
@@ -99,6 +151,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `repo-no-base-repository` — No generic `BaseRepository`
 - `repo-small-focused-interface` — Keep Repository interfaces under ~6 methods
 - `repo-bind-in-service-provider` — Bind the interface in a service provider
+- `repo-ship-implementation-and-binding` — Interface, implementation and binding in one change
 - `repo-inline-simple-delegate-complex` — Inline simple queries, delegate complex ones
 
 ### 5. Query Classes (HIGH)
@@ -131,6 +184,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `layout-no-top-level-service-repository-query` — No top-level layer folders
 - `layout-optional-folders-are-deliberate` — A missing folder is a decision
 - `layout-contracts-vs-support` — `Contracts/` holds interfaces, `Support/` holds implementations
+- `layout-shared-module-owns-mechanism` — A shared module owns the mechanism, not other domains' messages
 
 ### 8. Inter-Domain Communication (HIGH)
 
@@ -156,23 +210,28 @@ Read on demand — do not load all of these at once:
 - `references/directory-layout.md` — full tree, folder meanings, CI guards
 - `references/inter-domain-decision-guide.md` — picking Event vs Open Host Service vs Shared Kernel vs ACL
 - `references/anti-patterns.md` — 18 forbidden patterns with their grep signals
-- `references/pre-completion-checklist.md` — 28-question self-check before declaring done
+- `references/pre-completion-checklist.md` — 31-question self-check before declaring done
 - `examples/orders-domain/` — one worked vertical slice with every layer in place
 
 ## How to Use
 
-Read individual rule files for the full explanation and both code examples:
+Load in this order and stop when the answer is clear:
+
+1. This file — the Quick Reference names every rule, and usually settles the question.
+2. One rule file for the reasoning and both examples (~405 tokens each):
 
 ```
 rules/gate-eloquent-directly-by-default.md
 rules/query-internal-to-repositories.md
 ```
 
-For the complete guide with every rule expanded: `AGENTS.md`.
+3. A `references/` file only when a rule points at one.
+
+`AGENTS.md` is every rule compiled into one document (~22k tokens), for agents that read the AGENTS.md convention. Do not load it when the individual rule files are reachable.
 
 ## Related Skills
 
 - `laravel-eloquent` — what goes *inside* a Query Class: casts, scopes, N+1, pagination, transactions, raw SQL
-- `laravel-http` — the edge: routing, binding, form requests, resources, authorization, error mapping
+- `laravel-rest-api` — the edge: routing, binding, form requests, resources, authorization, error mapping
 - `laravel-async` — events, queued jobs, caching and scheduling
 - `laravel-testing` — how to test each layer defined here

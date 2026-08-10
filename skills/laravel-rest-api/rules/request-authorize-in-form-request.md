@@ -44,3 +44,5 @@ public function authorize(): bool
 ```
 
 The `?->` and `?? false` matter: an unauthenticated request has no user, and `null->can()` would be a `TypeError` rather than a 403.
+
+Once the decision is here, it is only here. Do not repeat it in the controller with `Gate::authorize()` — see `rules/authz-exactly-one-authorization-site.md`.

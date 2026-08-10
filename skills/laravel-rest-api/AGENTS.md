@@ -1,6 +1,6 @@
-# laravel-http
+# laravel-rest-api
 
-HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Use when writing or reviewing routes, controllers, form requests, API resources, policies or exception handling in a Laravel application.
+REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Use when writing or reviewing routes, controllers, form requests, API resources, policies or exception handling in a Laravel application.
 
 > Compiled from `rules/*.md` by `scripts/build-agents.mjs`. Do not edit by hand.
 
@@ -16,7 +16,7 @@ Every request that reads or writes tenant-scoped data is authorized before the d
 
 ## Authorize Before the Domain Runs
 
-Every request that reads or writes non-public data is authorized at the edge, before the Action executes. The three places that qualify: a Form Request's `authorize()`, a controller `authorize()` call, or route middleware.
+Every request that reads or writes non-public data is authorized at the edge, before the Action executes. The three places that qualify: a Form Request's `authorize()`, a controller `authorize()` call, or route middleware. Choose one of them per route and only one — see `rules/authz-exactly-one-authorization-site.md`.
 
 Authorization inside the Action is too late in one important way — it mixes the access decision with the use case, so the same Action called from a console command silently enforces a user policy that has no user.
 
@@ -57,6 +57,63 @@ final class UpdateOrderController
 ```
 
 Laravel 13 adds `#[Authorize]` on controller methods — see `rules/controller-attributes-for-middleware-and-authorization.md`.
+
+---
+
+## Authorize in Exactly One Place per Route
+
+Every route is authorized once. Not zero times, and not twice.
+
+A duplicated check is not extra safety. The two sites name different abilities sooner or later, so whichever runs first decides and the other is decoration — decoration nobody can delete safely, because the route still looks guarded in review.
+
+| The route | Authorize in |
+|-----------|--------------|
+| has a Form Request | that request's `authorize()` |
+| takes no body (DELETE, a POST toggle) | `#[Authorize]` (Laravel 13) or `Gate::authorize()` as the controller's first line |
+| shares a rule with its group (tenant membership, subscription) | route middleware, once, on the group |
+
+Two sites are correct only when they check different things — group middleware for membership plus a per-record ownership check. Never the same ability twice.
+
+**Incorrect (two decisions, two different abilities):**
+
+```php
+public function authorize(): bool     // ReopenTodoRequest
+{
+    return $this->user()?->can('update', $this->route('todo')) ?? false;
+}
+
+public function __invoke(ReopenTodoRequest $request, Todo $todo): TodoResource
+{
+    Gate::authorize('complete', $todo);   // second decision, different ability
+
+    return TodoResource::make($this->reopenTodo->handle($todo));
+}
+```
+
+**Correct (one site — the request, because this route has one):**
+
+```php
+public function authorize(): bool     // ReopenTodoRequest
+{
+    return $this->user()?->can('reopen', $this->route('todo')) ?? false;
+}
+
+public function __invoke(ReopenTodoRequest $request, Todo $todo): TodoResource
+{
+    return TodoResource::make($this->reopenTodo->handle($todo));   // no second check
+}
+```
+
+With no Form Request, the single site is the controller's first line — `Gate::authorize('delete', $todo);` — and nothing else checks that ability.
+
+A Form Request shared by two routes stays one site — branch inside `authorize()` rather than adding a controller check for the route that has a bound model:
+
+```php
+// POST /todos (nothing to own yet) and POST /todos/{todo}/subtasks (owned parent).
+return ! ($todo = $this->route('todo')) instanceof Todo || ($this->user()?->can('update', $todo) ?? false);
+```
+
+See `rules/authz-check-before-the-domain-runs.md` and `rules/authz-policies-per-model.md`.
 
 ---
 
@@ -229,6 +286,8 @@ public function authorize(): bool
 ```
 
 The `?->` and `?? false` matter: an unauthenticated request has no user, and `null->can()` would be a `TypeError` rather than a 403.
+
+Once the decision is here, it is only here. Do not repeat it in the controller with `Gate::authorize()` — see `rules/authz-exactly-one-authorization-site.md`.
 
 ---
 
@@ -1099,6 +1158,53 @@ Scrub secrets from logs too: add `password`, `token`, `secret` and `authorizatio
 
 ---
 
+## Mark Secret Parameters With #[\SensitiveParameter]
+
+PHP records every argument value in a stack trace. Any exception thrown below a function that received a password, token or API key carries that value into `getTraceAsString()`, `laravel.log`, the Ignition page and every frame uploaded to Sentry, Flare or Bugsnag. `APP_DEBUG=false` does not help: the leak is in the log and in a third party's UI, not in the response.
+
+`#[\SensitiveParameter]` (PHP 8.2+) replaces the argument with `Object(SensitiveParameterValue)` wherever a trace is rendered. Apply it to plaintext passwords, API keys and bearer tokens, webhook signing secrets, encryption keys, connection strings, OTP codes, card numbers and national IDs.
+
+It redacts traces only — not the exception *message* (never interpolate a secret into one), not values you log yourself, and not a secret serialized into a queued job payload (see the `laravel-async` skill's `job-never-serialize-secrets`).
+
+**Incorrect (the password is in the trace of every exception thrown below this call):**
+
+```php
+public function handle(string $email, string $password): User
+{
+    // ... throws InvalidCredentialsException on a bad password
+}
+```
+
+```text
+#3 AuthenticateUserAction->handle('ada@example.com', 'hunter2-real-password')
+```
+
+**Correct:**
+
+```php
+public function handle(string $email, #[\SensitiveParameter] string $password): User
+```
+
+```text
+#3 AuthenticateUserAction->handle('ada@example.com', Object(SensitiveParameterValue))
+```
+
+```php
+// Promoted constructor parameters take it too — this client would otherwise put
+// its key in the trace of any downstream HTTP failure.
+public function __construct(
+    #[\SensitiveParameter] private string $apiKey,
+    #[\SensitiveParameter] private string $webhookSecret,
+    private string $baseUrl,
+) {}
+```
+
+Pair it with the framework's own redaction: keep `password`, `token`, `secret` and `authorization` in the handler's `dontFlash`, and scrub request bodies in the logging pipeline. See `rules/error-never-leak-internals.md`.
+
+Reference: [PHP RFC — Redacting parameters in back traces](https://wiki.php.net/rfc/redact_parameters_in_back_traces)
+
+---
+
 # 6. Controllers
 
 **Impact: MEDIUM-HIGH**
@@ -1214,7 +1320,7 @@ Route::post('/orders', OrderStoreController::class)->name('orders.store');
 
 `where()`, `orderBy()`, `with()` and `join()` do not appear in a controller. The controller builds Value Objects from the request and calls the Repository; the Query Class writes the clauses.
 
-The same applies to Blade: a view receives data, it does not fetch it.
+It holds however small the query looks — a lone `where()` with `paginate()`, a relation read off `$request->user()`, an optional `->when()` filter, a request-supplied page size, a `latest()` default. Same for a Blade view and a Form Request: a view receives data rather than fetching it, and `authorize()`/`rules()` never build a result set.
 
 **Incorrect (filters built in the controller, duplicated in the export endpoint):**
 
@@ -1232,6 +1338,23 @@ public function index(Request $request): View
 }
 ```
 
+**Incorrect (small enough to feel harmless — still four query rules at the edge):**
+
+```php
+final class ListNotificationsController
+{
+    public function __invoke(Request $request): AnonymousResourceCollection
+    {
+        $notifications = $request->user()->notifications()
+            ->when($request->boolean('unread'), fn (Builder $query): Builder => $query->whereNull('read_at'))
+            ->latest()
+            ->paginate(min((int) $request->input('per_page', 15), 100));
+
+        return NotificationResource::collection($notifications);
+    }
+}
+```
+
 **Correct:**
 
 ```php
@@ -1243,7 +1366,12 @@ public function __invoke(SearchOrdersRequest $request, OrderRepositoryInterface 
 }
 ```
 
-The sort column is now whitelisted inside the Query Class rather than passed raw from the request. See the `laravel-patterns` skill for the full boundary.
+```php
+// ...and the same shape for the second: one call, no clauses.
+return NotificationResource::collection($notifications->feedFor($request->user(), $request->toFilter()));
+```
+
+The sort column is whitelisted and the page-size cap lives in the filter Value Object. See the `laravel-patterns` skill for the full boundary.
 
 ---
 

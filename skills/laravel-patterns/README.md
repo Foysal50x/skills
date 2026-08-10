@@ -2,7 +2,7 @@
 
 Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent.
 
-55 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+59 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 
@@ -14,7 +14,7 @@ Or as part of the Claude Code plugin:
 
 ```
 /plugin marketplace add Foysal50x/skills
-/plugin install laravel-skills@foysal50x
+/plugin install laravel-skill@foysal50x
 ```
 
 ## Contents

@@ -1,6 +1,6 @@
 # Laravel Skills
 
-Opinionated Laravel engineering skills for AI coding agents. 166 rules across five skills, built for domain-driven Laravel applications.
+Opinionated Laravel engineering skills for AI coding agents. 173 rules across five skills, built for domain-driven Laravel applications.
 
 Skills follow the [Agent Skills](https://agentskills.io/) format and work with Claude Code, Cursor, Copilot and anything else that reads `SKILL.md`.
 
@@ -24,10 +24,8 @@ npx skills add Foysal50x/skills --skill laravel-patterns
 
 ```
 /plugin marketplace add Foysal50x/skills
-/plugin install laravel-skills@foysal50x
+/plugin install laravel-skill@foysal50x
 ```
-
-Skills are then invoked as `laravel-skills:laravel-patterns`, `laravel-skills:laravel-eloquent`, and so on.
 
 ### Manual
 
@@ -36,11 +34,22 @@ git clone https://github.com/Foysal50x/skills.git
 cp -r skills/skills/laravel-patterns ~/.claude/skills/
 ```
 
+### How each install names the skills
+
+The directory name is the skill name, and only the Claude Code plugin adds a namespace on top of it:
+
+| Install | Invoked as |
+|---------|------------|
+| skills.sh, or a manual copy into `~/.claude/skills/` | `laravel-patterns`, `laravel-eloquent`, `laravel-rest-api`, `laravel-async`, `laravel-testing` |
+| Claude Code plugin | `laravel-skill:laravel-patterns`, `laravel-skill:laravel-eloquent`, … |
+
+The `laravel-` prefix stays in the directory name because two of the five — `patterns` and `testing` — would otherwise be generic enough to collide with any other skill pack in `~/.claude/skills/`.
+
 ## Available Skills
 
 ### laravel-patterns
 
-Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 55 rules.
+Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 59 rules.
 
 **Use when:**
 
@@ -66,9 +75,9 @@ Data-layer engineering: what goes *inside* a Query Class. 36 rules.
 
 **Covers:** N+1 elimination · pagination strategy · transactions and locking · casts and model declaration · scopes, global scopes and soft deletes · raw SQL and type-safe expressions · bulk operations
 
-### laravel-http
+### laravel-rest-api
 
-The edge: translating HTTP into domain types and back. 29 rules.
+The edge: translating HTTP into domain types and back. 31 rules.
 
 **Use when:**
 
@@ -81,7 +90,7 @@ The edge: translating HTTP into domain types and back. 29 rules.
 
 ### laravel-async
 
-Work that happens outside the request. 28 rules.
+Work that happens outside the request. 29 rules.
 
 **Use when:**
 
@@ -136,7 +145,7 @@ CI runs both on every push and fails if `AGENTS.md` is stale.
 
 1. Copy `rules/_template.md` to `rules/{prefix}-{slug}.md`, using a prefix declared in `rules/_sections.md`.
 2. Fill in the frontmatter (`title`, `impact`, `tags`) and both code examples.
-3. Add the slug to the Quick Reference list in `SKILL.md`.
+3. Add the slug to the Quick Reference list in `SKILL.md`, and to the Pick the Rule table if it answers a distinct question.
 4. Run `npm run check`.
 
 ## Sources

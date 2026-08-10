@@ -110,7 +110,7 @@ for (const skill of skills) {
   const skillPath = join(SKILLS_DIR, skill, 'SKILL.md')
   if (!existsSync(skillPath)) continue
   const source = readFileSync(skillPath, 'utf8')
-  for (const [, target] of source.matchAll(/`laravel-skill:([a-z0-9-]+)`/g)) {
+  for (const [, target] of source.matchAll(/`(laravel-[a-z][a-z-]*)`/g)) {
     if (!skillNames.has(target)) errors.push(`${skill}: SKILL.md references unknown skill "${target}"`)
   }
 }

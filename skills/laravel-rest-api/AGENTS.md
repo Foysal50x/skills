@@ -1,6 +1,6 @@
 # laravel-rest-api
 
-REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Also covers outbound calls: HTTP client timeouts, retries, status handling and pooling. Use when writing or reviewing routes, controllers, form requests, API resources, policies, exception handling, or any call to a third-party API in a Laravel application.
+REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Also covers outbound calls — HTTP client timeouts, retries, status handling and pooling. Use when writing or reviewing routes, controllers, form requests, API resources, policies, exception handling, or any call to a third-party API in a Laravel application.
 
 > Compiled from `rules/*.md` by `scripts/build-agents.mjs`. Do not edit by hand.
 

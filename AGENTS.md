@@ -51,6 +51,7 @@ Always run `npm run check` before committing. CI fails if `AGENTS.md` is stale.
 - Cross-reference sibling rules as `` `rules/{slug}.md` `` — the validator checks these resolve.
 - Every rule slug must appear in its `SKILL.md` Quick Reference, in backticks.
 - Cross-reference another skill by its bare name, `` `laravel-eloquent` `` — the validator checks these resolve.
+- **Frontmatter is real YAML.** Installers parse it strictly, so an unquoted value must not contain `: ` (opens a nested mapping) or ` #` (starts a comment), and must not begin with `[ { & * ! | > % @` or a backtick. Quote it when it does: `title: 'Mark Secret Parameters With #[\SensitiveParameter]'`. A file that trips this is skipped entirely by `npx skills add`, so `npm run validate` fails on it.
 - **Size budget: 2500 characters (~600 tokens).** The validator errors above it and warns from 2200. One rule, one or two sentences of rationale, one incorrect and one correct example — nothing else. Needing more means it is two rules, or the detail belongs in `references/`.
 
 ### Token cost model

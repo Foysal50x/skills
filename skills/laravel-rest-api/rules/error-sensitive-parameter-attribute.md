@@ -1,5 +1,5 @@
 ---
-title: Mark Secret Parameters With #[\SensitiveParameter]
+title: 'Mark Secret Parameters With #[\SensitiveParameter]'
 impact: HIGH
 impactDescription: keeps passwords and API keys out of stack traces and error reporters
 tags: errors, security, secrets, php, logging

@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Async
 
-Rules for work that happens outside the request: 29 rules across 5 sections.
+Rules for work that happens outside the request: 33 rules across 5 sections.
 
 Two assumptions run through all of them:
 
@@ -39,6 +39,10 @@ Two assumptions run through all of them:
 | A fix for stale or cross-tenant cached data | `cache-invalidate-on-model-events`, `cache-tags-for-related-data` |
 | A scheduler entry | `schedule-queue-work-not-inline`, `schedule-prevent-overlapping` |
 | A fix for duplicate dispatches | `job-unique-jobs` |
+| A job that calls a third-party API | `job-rate-limit-external-calls` |
+| Queue configuration, or a job running twice | `job-retry-after-exceeds-timeout` |
+| A notification or mailable | `event-queue-notifications-and-mailables` |
+| The same lookup read all over one request | `cache-memoize-within-the-request` |
 
 ## Before You Write Code
 
@@ -67,6 +71,8 @@ Two assumptions run through all of them:
 - `job-retries-and-backoff` — Set tries, backoff and timeout on every job
 - `job-serialize-ids-not-models` — Pass identifiers, not object graphs
 - `job-never-serialize-secrets` — A credential never enters a job payload
+- `job-retry-after-exceeds-timeout` — `retry_after` longer than any job's timeout
+- `job-rate-limit-external-calls` — Throttle jobs that call a third-party API
 - `job-unique-jobs` — Collapse duplicate dispatches with `ShouldBeUnique`
 - `job-batches-and-chains` — Batches for fan-out, chains for ordered steps
 - `job-handle-failure-explicitly` — Decide what happens after the last attempt
@@ -79,6 +85,7 @@ Two assumptions run through all of them:
 - `event-listeners-own-domain-only` — A listener touches only its own domain
 - `event-queue-side-effecting-listeners` — Side-effecting listeners are queued
 - `event-dispatch-after-commit` — Dispatch after the transaction commits
+- `event-queue-notifications-and-mailables` — Queue them, and send after commit
 
 ### 3. Queue Operations (HIGH)
 
@@ -96,6 +103,7 @@ Two assumptions run through all of them:
 - `cache-tags-for-related-data` — Tag related entries to flush a group
 - `cache-lock-against-stampede` — One rebuild, not two hundred
 - `cache-touch-to-extend-ttl` — Sliding expiry without a rewrite (Laravel 13)
+- `cache-memoize-within-the-request` — Collapse repeat reads inside one request
 
 ### 5. Scheduling (MEDIUM)
 
@@ -122,6 +130,7 @@ Two assumptions run through all of them:
 | `Cache::tags()` | Redis, Memcached or DynamoDB. Not `file` or `database`. |
 | `Bus::batch()` | The `job_batches` table |
 | Failed-job retention | The `failed_jobs` table |
+| `Cache::memo()`, `failover` cache driver | Laravel 13, and recent 12.x releases — check your version |
 
 ## Reference Material
 

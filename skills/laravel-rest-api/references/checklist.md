@@ -52,3 +52,12 @@ Any "No" or "Unsure" means revise.
 31. Does any controller contain `where()`, `orderBy()`, `with()`, `paginate()` or `DB::` — including a relation read off `$request->user()`?
 32. Does any controller open a transaction, dispatch a job, or send mail directly?
 33. Is `Request` (or `$request->all()`) passed to anything beyond the controller?
+
+## Outbound HTTP
+
+34. Does every outbound call set `timeout()` and `connectTimeout()`?
+35. Is each response either `throw()`n or matched on status — never `json()`ed unchecked?
+36. Does every retried write carry an idempotency key the upstream honours?
+37. Are retries limited to connection errors and 5xx, with increasing delays?
+38. Are independent calls pooled rather than awaited one after another?
+39. Does the adapter translate upstream failures into a domain exception?

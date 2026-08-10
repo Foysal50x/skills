@@ -48,3 +48,5 @@ DB::transaction(function () use ($data): void {
 ```
 
 `after_commit` covers queued listeners, queued jobs and queued notifications. It does not defer synchronous listeners — one more reason side-effecting listeners are queued.
+
+Per-event rather than per-connection, an event class may implement `ShouldDispatchAfterCommit` — the same guarantee, declared where the event is defined. Notifications and mailables use `afterCommit()`; see `rules/event-queue-notifications-and-mailables.md`.

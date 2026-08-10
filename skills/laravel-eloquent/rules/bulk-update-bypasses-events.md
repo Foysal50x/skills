@@ -41,3 +41,5 @@ Order::query()
 ```
 
 Choose by cost: thousands of rows with a required per-row side effect is a queued job over chunks, not a single bulk statement.
+
+When you already hold the models, `$orders->toQuery()->update([...])` builds the `whereIn` from the collection's keys for you — same event-skipping caveat, less hand-written SQL.

@@ -34,3 +34,8 @@ The section ID (in parentheses) is the filename prefix used to group rules.
 
 **Impact:** MEDIUM-HIGH
 **Description:** A controller maps HTTP to the domain and back. It holds no business logic and constructs no queries.
+
+## 7. Outbound HTTP (client)
+
+**Impact:** MEDIUM-HIGH
+**Description:** Calls leaving the application need the same discipline as calls arriving: an explicit timeout, a retry policy that cannot amplify an outage, a decision per status code, and no request in a test that reaches the network.

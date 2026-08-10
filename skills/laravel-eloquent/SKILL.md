@@ -1,6 +1,6 @@
 ---
 name: laravel-eloquent
-description: Eloquent and query-layer engineering rules for Laravel — eliminating N+1, choosing a pagination strategy, short atomic transactions, casts and scopes on the model, and where raw SQL is allowed. Use when writing or reviewing Eloquent models, migrations, query classes, repositories, exports or reporting queries, or when a Laravel endpoint is slow, leaking memory, or returning wrongly-typed columns.
+description: Eloquent and query-layer engineering rules for Laravel — eliminating N+1, choosing a pagination strategy, short atomic transactions, casts and scopes on the model, where raw SQL is allowed, and how migrations declare the schema those queries depend on. Use when writing or reviewing Eloquent models, migrations, query classes, repositories, exports or reporting queries, or when a Laravel endpoint is slow, leaking memory, or returning wrongly-typed columns.
 license: MIT
 metadata:
   author: Foysal Ahmed
@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Eloquent
 
-Data-layer engineering rules: 36 rules across 7 sections, ordered by what actually takes an application down.
+Data-layer engineering rules: 45 rules across 8 sections, ordered by what actually takes an application down.
 
 Assumes the layering from the `laravel-patterns` skill: **all query construction lives in Query Classes and Repository implementations.** These rules describe what goes *inside* those classes.
 
@@ -37,6 +37,11 @@ Assumes the layering from the `laravel-patterns` skill: **all query construction
 | An existence check | `perf-exists-not-count` |
 | A pass over a large table | `perf-chunk-large-result-sets`, `bulk-lazy-by-id-for-huge-sets` |
 | A slow endpoint to diagnose | `perf-index-filtered-columns`, `perf-avoid-wherehas-on-hot-paths` |
+| One value from a has-many | `perf-subquery-select-for-single-values` |
+| Sorting by a related table's column | `perf-order-by-correlated-subquery` |
+| A count of related rows | `perf-withcount-not-loaded-relations` |
+| A migration | `migration-never-edit-a-deployed-migration`, `migration-constrained-foreign-keys` |
+| A backfill or default value | `migration-separate-schema-from-data`, `migration-mirror-defaults-in-the-model` |
 
 ## Before You Write Code
 
@@ -55,8 +60,9 @@ Assumes the layering from the `laravel-patterns` skill: **all query construction
 | 3 | Transactions and Consistency | HIGH | `tx-` |
 | 4 | Model Declaration | HIGH | `model-` |
 | 5 | Scopes, Global Scopes and Soft Deletes | MEDIUM-HIGH | `scope-` |
-| 6 | Raw SQL and Query Expressions | MEDIUM | `raw-` |
-| 7 | Bulk Operations | MEDIUM | `bulk-` |
+| 6 | Migrations and Schema | MEDIUM-HIGH | `migration-` |
+| 7 | Raw SQL and Query Expressions | MEDIUM | `raw-` |
+| 8 | Bulk Operations | MEDIUM | `bulk-` |
 
 ## Quick Reference
 
@@ -69,6 +75,10 @@ Assumes the layering from the `laravel-patterns` skill: **all query construction
 - `perf-chunk-large-result-sets` — Chunk or stream instead of `get()`
 - `perf-avoid-wherehas-on-hot-paths` — Replace `whereHas` with a join on hot paths
 - `perf-index-filtered-columns` — Index every column you filter, join or sort on
+- `perf-withcount-not-loaded-relations` — Count with `withCount()`, never a loaded collection
+- `perf-subquery-select-for-single-values` — Pull a single related value with a subquery
+- `perf-order-by-correlated-subquery` — Sort by a related value with a subquery, not a join
+- `perf-set-relation-to-close-the-loop` — Hand the parent back with `setRelation()`
 
 ### 2. Pagination (HIGH)
 
@@ -103,7 +113,15 @@ Assumes the layering from the `laravel-patterns` skill: **all query construction
 - `scope-soft-deletes-for-recoverable` — `SoftDeletes` only for genuinely recoverable records
 - `scope-explicit-trashed-queries` — Name the query after what it includes
 
-### 6. Raw SQL and Query Expressions (MEDIUM)
+### 6. Migrations and Schema (MEDIUM-HIGH)
+
+- `migration-never-edit-a-deployed-migration` — Once it has run in production it is history
+- `migration-separate-schema-from-data` — Structure in one migration, data in another
+- `migration-constrained-foreign-keys` — `constrained()` plus an explicit delete behaviour
+- `migration-reversible-down` — Write a `down()` that actually reverses `up()`
+- `migration-mirror-defaults-in-the-model` — The same default in `$attributes`
+
+### 7. Raw SQL and Query Expressions (MEDIUM)
 
 - `raw-only-inside-query-classes` — Raw SQL belongs in Query Classes and Repositories
 - `raw-tpetry-instead-of-db-raw` — Type-safe expressions instead of `DB::raw()`
@@ -111,7 +129,7 @@ Assumes the layering from the `laravel-patterns` skill: **all query construction
 - `raw-custom-expression-helpers` — Wrap driver-specific SQL in an `Expression` class
 - `raw-never-interpolate-user-input` — Bindings for values, allow-lists for identifiers
 
-### 7. Bulk Operations (MEDIUM)
+### 8. Bulk Operations (MEDIUM)
 
 - `bulk-upsert-instead-of-loop` — Batch inserts and upserts
 - `bulk-update-bypasses-events` — Bulk writes skip model events; handle that deliberately

@@ -1,6 +1,6 @@
 # Laravel Skills
 
-Opinionated Laravel engineering skills for AI coding agents. 173 rules across five skills, built for domain-driven Laravel applications.
+Opinionated Laravel engineering skills for AI coding agents. 193 rules across five skills, built for domain-driven Laravel applications.
 
 Skills follow the [Agent Skills](https://agentskills.io/) format and work with Claude Code, Cursor, Copilot and anything else that reads `SKILL.md`.
 
@@ -49,7 +49,7 @@ The `laravel-` prefix stays in the directory name because two of the five — `p
 
 ### laravel-patterns
 
-Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 59 rules.
+Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 60 rules.
 
 **Use when:**
 
@@ -64,7 +64,7 @@ Placement rules for domain-driven Laravel: when to create an Action, Service, Re
 
 ### laravel-eloquent
 
-Data-layer engineering: what goes *inside* a Query Class. 36 rules.
+Data-layer engineering: what goes *inside* a Query Class, plus migrations. 45 rules.
 
 **Use when:**
 
@@ -73,11 +73,11 @@ Data-layer engineering: what goes *inside* a Query Class. 36 rules.
 - A column comes back as a string when it should be an enum, date or array
 - Writing an import, export, backfill or reporting query
 
-**Covers:** N+1 elimination · pagination strategy · transactions and locking · casts and model declaration · scopes, global scopes and soft deletes · raw SQL and type-safe expressions · bulk operations
+**Covers:** N+1 elimination · subquery selects and sorting · pagination strategy · transactions and locking · casts and model declaration · scopes, global scopes and soft deletes · migrations and schema · raw SQL and type-safe expressions · bulk operations
 
 ### laravel-rest-api
 
-The edge: translating HTTP into domain types and back. 31 rules.
+The edge in both directions: HTTP into domain types, and outbound API calls. 35 rules.
 
 **Use when:**
 
@@ -86,11 +86,11 @@ The edge: translating HTTP into domain types and back. 31 rules.
 - Deciding where an authorization check goes
 - Turning a domain exception into an HTTP response
 
-**Covers:** authorization · Form Requests and DTO construction · route model binding and scoped nested bindings · API Resources · exception-to-status mapping · thin controllers
+**Covers:** authorization · Form Requests and DTO construction · route model binding and scoped nested bindings · API Resources · exception-to-status mapping · thin controllers · outbound HTTP timeouts, retries, status handling and pooling
 
 ### laravel-async
 
-Work that happens outside the request. 29 rules.
+Work that happens outside the request. 33 rules.
 
 **Use when:**
 
@@ -103,7 +103,7 @@ Work that happens outside the request. 29 rules.
 
 ### laravel-testing
 
-Test strategy for a layered application. 18 rules.
+Test strategy for a layered application. 20 rules.
 
 **Use when:**
 

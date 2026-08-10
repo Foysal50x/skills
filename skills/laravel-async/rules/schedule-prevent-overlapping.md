@@ -40,3 +40,5 @@ final class ExpireAbandonedOrders implements ShouldQueue, ShouldBeUnique
 ```
 
 The lock lives in the cache, so an atomic store is required — the same requirement as unique jobs. Pick an expiry longer than the worst observed run time and shorter than the interval times two.
+
+When the work is an unbounded cursor rather than a fixed batch, bound it by time as well: `->takeUntilTimeout(now()->addMinutes(13))` on the LazyCollection ends the pass before the next tick, leaving the remainder for the following run.

@@ -16,35 +16,37 @@ Any "No" or "Unsure" means revise.
 7. Does `Event::fake()` name the specific event classes rather than suppressing everything?
 8. Is Eloquent or the query builder mocked anywhere? It must not be.
 9. Is time frozen or travelled for anything date-dependent?
+10. Is `Http::preventStrayRequests()` on, with every outbound call faked — including the failure paths?
+11. Are queued mailables asserted with `assertQueued()` rather than `assertSent()`?
 
 ## Database tests
 
-10. Does each filter test include at least one row that must be excluded, per condition?
-11. Do assertions compare exact id lists rather than only counts?
-12. Is the default ordering asserted?
-13. Is an unwhitelisted sort column asserted to fall back rather than reach `orderBy`?
-14. Are the relations the Resource reads asserted as loaded, or covered by a query-count test?
-15. Is rollback tested for at least one multi-step write?
-16. Is idempotency tested for every queued handler that writes or charges?
+12. Does each filter test include at least one row that must be excluded, per condition?
+13. Do assertions compare exact id lists rather than only counts?
+14. Is the default ordering asserted?
+15. Is an unwhitelisted sort column asserted to fall back rather than reach `orderBy`?
+16. Are the relations the Resource reads asserted as loaded, or covered by a query-count test?
+17. Is rollback tested for at least one multi-step write?
+18. Is idempotency tested for every queued handler that writes or charges?
 
 ## Feature tests
 
-17. Does every protected endpoint have unauthenticated, unpermitted and other-tenant cases?
-18. Do authorization tests assert that state did not change, not only the status code?
-19. Is the response payload structure asserted, including keys that must not appear?
-20. Are validation failures asserted with `assertJsonValidationErrors`?
-21. Are queued jobs and dispatched events asserted, including the target queue?
-22. Is "nothing is dispatched on the failure path" asserted where it matters?
+19. Does every protected endpoint have unauthenticated, unpermitted and other-tenant cases?
+20. Do authorization tests assert that state did not change, not only the status code?
+21. Is the response payload structure asserted, including keys that must not appear?
+22. Are validation failures asserted with `assertJsonValidationErrors`?
+23. Are queued jobs and dispatched events asserted, including the target queue?
+24. Is "nothing is dispatched on the failure path" asserted where it matters?
 
 ## Value Objects
 
-23. Are predicates and transformations tested directly, with no database or container?
-24. Does any Value Object test require a `Builder`? If so, the Value Object violates the purity rule.
-25. Are boundary values covered — inclusive edges, null bounds, empty ranges?
+25. Are predicates and transformations tested directly, with no database or container?
+26. Does any Value Object test require a `Builder`? If so, the Value Object violates the purity rule.
+27. Are boundary values covered — inclusive edges, null bounds, empty ranges?
 
 ## Suite health
 
-26. Does the suite run in parallel (`--parallel`)?
-27. Is `Model::shouldBeStrict()` enabled in the test environment?
-28. Does CI run the integration suite against the production database engine?
-29. Are there any tests that fail depending on the time of day or day of month?
+28. Does the suite run in parallel (`--parallel`)?
+29. Is `Model::shouldBeStrict()` enabled in the test environment?
+30. Does CI run the integration suite against the production database engine?
+31. Are there any tests that fail depending on the time of day or day of month?

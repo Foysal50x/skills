@@ -62,3 +62,14 @@ final class SyncToUpstream implements ShouldQueue
 ```
 
 Add jitter when many jobs retry together, or they synchronize into a thundering herd.
+
+A time-boxed job uses `retryUntil()` instead of a count — and must set `$tries = 0`, or the attempt limit fires before the deadline does:
+
+```php
+public int $tries = 0;
+
+public function retryUntil(): DateTimeInterface
+{
+    return now()->addHours(4);
+}
+```

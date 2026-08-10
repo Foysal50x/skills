@@ -46,3 +46,5 @@ final class RebuildSearchIndex implements ShouldQueue, ShouldBeUniqueUntilProces
 ```
 
 Uniqueness requires a cache driver with atomic locks — Redis, Memcached, DynamoDB or a database store. The `array` and `file` drivers will not do it correctly across processes.
+
+`ShouldBeUnique` holds the lock until the job finishes, so a change made while it runs is dropped. `ShouldBeUniqueUntilProcessing` releases the lock as processing starts, which is what you want for a job that rebuilds current state — a search-index or cache refresh.

@@ -275,6 +275,53 @@ Return 202 with a resource the client can poll, or push completion over a broadc
 
 ---
 
+## Rate Limit Jobs That Call an External API
+
+Ten workers draining a backlog will hit a third-party API as fast as the network allows. The provider answers with 429s, every job fails, all of them retry, and the retries produce the same burst. Backoff on the job does not help — the limit is global, not per job.
+
+Define the limiter once and apply it as job middleware, which releases the job back to the queue instead of consuming an attempt.
+
+**Incorrect (concurrency decided by how many workers happen to be running):**
+
+```php
+final class SyncContactToCrm implements ShouldQueue
+{
+    public int $tries = 5;
+    public array $backoff = [10, 30, 60];
+
+    public function handle(CrmClient $crm): void
+    {
+        $crm->upsert($this->contactId);   // 429 as soon as the queue has depth
+    }
+}
+```
+
+**Correct:**
+
+```php
+// AppServiceProvider::boot()
+RateLimiter::for('crm', fn () => Limit::perMinute(60));
+```
+
+```php
+final class SyncContactToCrm implements ShouldQueue
+{
+    public int $tries = 5;
+
+    /** @return list<object> */
+    public function middleware(): array
+    {
+        return [(new RateLimited('crm'))->dontRelease()];
+    }
+}
+```
+
+`RateLimited` releases the job with a delay by default, so a throttled job returns to the queue rather than burning an attempt. `dontRelease()` is for the case where you would rather the job wait in the worker than churn the queue.
+
+For a limit that is about not overlapping rather than not exceeding a rate, use `WithoutOverlapping` keyed by the resource.
+
+---
+
 ## Set Tries, Backoff and Timeout on Every Job
 
 The defaults are wrong for most jobs. Unlimited tries turn a permanently failing job into an infinite loop that starves the queue. No backoff hammers an upstream that is already struggling. No timeout lets one hung HTTP call occupy a worker forever.
@@ -332,6 +379,69 @@ final class SyncToUpstream implements ShouldQueue
 ```
 
 Add jitter when many jobs retry together, or they synchronize into a thundering herd.
+
+A time-boxed job uses `retryUntil()` instead of a count — and must set `$tries = 0`, or the attempt limit fires before the deadline does:
+
+```php
+public int $tries = 0;
+
+public function retryUntil(): DateTimeInterface
+{
+    return now()->addHours(4);
+}
+```
+
+---
+
+## Keep retry_after Longer Than Any Job's Timeout
+
+`retry_after` on the queue connection is how long the worker waits before deciding a reserved job died and releasing it back to the queue. If a job is still running when that timer expires, a second worker picks it up — two copies of the same charge, the same export, the same email.
+
+The rule is one line: `retry_after` must exceed the longest `timeout` of any job on that connection, plus its startup cost.
+
+**Incorrect (a two-minute job on a ninety-second lease):**
+
+```php
+final class GenerateMonthlyStatements implements ShouldQueue
+{
+    public int $timeout = 120;
+}
+```
+
+```php
+// config/queue.php
+'redis' => [
+    'driver' => 'redis',
+    'retry_after' => 90,      // job is re-dispatched while the first copy is still working
+],
+```
+
+**Correct:**
+
+```php
+// config/queue.php — one connection per timeout class
+'redis' => [
+    'driver' => 'redis',
+    'queue' => 'default',
+    'retry_after' => 180,
+],
+
+'redis-long' => [
+    'driver' => 'redis',
+    'queue' => 'reports',
+    'retry_after' => 3600,    // exports may legitimately run for 45 minutes
+],
+```
+
+```php
+final class GenerateMonthlyStatements implements ShouldQueue
+{
+    public int $timeout = 120;
+    public string $connection = 'redis';
+}
+```
+
+Horizon's `timeout` supervisor setting must be lower than `retry_after` for the same reason. Idempotent handlers are the backstop when this is wrong — see `rules/job-idempotent-handlers.md` — but the configuration is the fix.
 
 ---
 
@@ -420,6 +530,8 @@ final class RebuildSearchIndex implements ShouldQueue, ShouldBeUniqueUntilProces
 ```
 
 Uniqueness requires a cache driver with atomic locks — Redis, Memcached, DynamoDB or a database store. The `array` and `file` drivers will not do it correctly across processes.
+
+`ShouldBeUnique` holds the lock until the job finishes, so a change made while it runs is dropped. `ShouldBeUniqueUntilProcessing` releases the lock as processing starts, which is what you want for a job that rebuilds current state — a search-index or cache refresh.
 
 ---
 
@@ -525,6 +637,8 @@ DB::transaction(function () use ($data): void {
 ```
 
 `after_commit` covers queued listeners, queued jobs and queued notifications. It does not defer synchronous listeners — one more reason side-effecting listeners are queued.
+
+Per-event rather than per-connection, an event class may implement `ShouldDispatchAfterCommit` — the same guarantee, declared where the event is defined. Notifications and mailables use `afterCommit()`; see `rules/event-queue-notifications-and-mailables.md`.
 
 ---
 
@@ -670,6 +784,54 @@ Good names: `OrderPlaced`, `OrderCancelled`, `PaymentCaptured`, `ConversationCom
 Bad names: `OrderEvent`, `ProcessOrder`, `SendReceipt`, `OrderHandler`, `UpdateInventory`.
 
 If you find yourself wanting a listener to return a value to the producer, you wanted a synchronous call — see the `laravel-patterns` skill on Open Host Services.
+
+---
+
+## Queue Notifications and Mailables, and Send Them After Commit
+
+A `Notification` or `Mailable` without `ShouldQueue` is delivered inline: the user's request waits for SMTP, Slack or a push provider, and a provider outage becomes a 500 on an action that otherwise succeeded.
+
+Put `ShouldQueue` on the class rather than remembering `Mail::queue()` at each call site — `Mail::send()` and `$user->notify()` then queue it everywhere, including the call sites added later.
+
+Queued delivery inside a transaction has the same race as a job: the worker can pick it up before the commit and read a row that does not exist yet.
+
+**Incorrect (inline delivery, and a mail that goes out for a write that rolls back):**
+
+```php
+final class InvoicePaid extends Notification
+{
+    // no ShouldQueue — the HTTP request pays for the SMTP round trip
+}
+
+DB::transaction(function () use ($invoice) {
+    $invoice->markPaid();
+    $invoice->customer->notify(new InvoicePaid($invoice->id));
+});
+```
+
+**Correct:**
+
+```php
+final class InvoicePaid extends Notification implements ShouldQueue
+{
+    use Queueable;
+
+    public function __construct(private readonly int $invoiceId)
+    {
+        $this->afterCommit();
+    }
+}
+```
+
+```php
+// Same for a Mailable:
+final class StatementReady extends Mailable implements ShouldQueue
+{
+    use Queueable;
+}
+```
+
+`afterCommit()` in the constructor covers every call site; `after_commit => true` on the queue connection covers the whole application. Route heavy channels to their own queue with `viaQueues()` so a slow provider cannot delay everything else. See `rules/event-dispatch-after-commit.md`.
 
 ---
 
@@ -1036,6 +1198,45 @@ Locks need an atomic store — Redis, Memcached, DynamoDB or a database store. `
 
 ---
 
+## Memoize Repeat Reads Within a Single Request
+
+A settings lookup, a feature-flag check or a tenant record is read from three services, a middleware and two Blade components. Each read is a Redis round trip for a value that cannot change mid-request. The cache is doing its job; the number of calls is the problem.
+
+`Cache::memo()` keeps the resolved value in memory for the rest of the request or job, and drops it as soon as something writes to that key. `once()` memoizes a computed value that never touches the cache store at all.
+
+**Incorrect (six round trips for one value):**
+
+```php
+final readonly class BillingPolicy
+{
+    public function allows(string $feature): bool
+    {
+        $plan = Cache::get("tenant:{$this->tenantId}:plan");   // called from five places per request
+
+        return in_array($feature, $plan['features'], true);
+    }
+}
+```
+
+**Correct:**
+
+```php
+$plan = Cache::memo()->get("tenant:{$this->tenantId}:plan");        // default store
+$plan = Cache::memo('redis')->get("tenant:{$this->tenantId}:plan"); // a named store
+```
+
+```php
+// No cache store involved — memoized for the life of the object.
+public function permissions(): Collection
+{
+    return once(fn (): Collection => $this->roles->flatMap->permissions->unique());
+}
+```
+
+`Cache::memo()` is a decorator, not a store: it still reads through to Redis once, and `put()` or `forget()` through it invalidates the in-memory copy. Available in Laravel 13 and recent 12.x releases — check your version before relying on it. Use `once()` when the value is derived rather than cached.
+
+---
+
 ## Cache Read-Heavy Endpoints and Expensive Queries
 
 Dashboard aggregates, reference data, permission lookups, feature flags and rendered fragments are read far more often than they change. Cache them, and put the caching in the Repository — the layer that owns data access — not in the controller.
@@ -1265,6 +1466,8 @@ final class ExpireAbandonedOrders implements ShouldQueue, ShouldBeUnique
 
 The lock lives in the cache, so an atomic store is required — the same requirement as unique jobs. Pick an expiry longer than the worst observed run time and shorter than the interval times two.
 
+When the work is an unbounded cursor rather than a fixed batch, bound it by time as well: `->takeUntilTimeout(now()->addMinutes(13))` on the LazyCollection ends the pass before the next tick, leaving the remainder for the following run.
+
 ---
 
 ## A Scheduled Task Queues Work, It Does Not Do It
@@ -1337,5 +1540,14 @@ Requirements and caveats:
 - Named closures need `->name('...')` so the lock key is stable across servers.
 
 The alternative — running the cron on only one designated node — creates a single point of failure. Prefer the lock.
+
+Shared settings belong on a group rather than repeated per entry — one place to change, and no task that quietly missed the flag:
+
+```php
+Schedule::daily()->onOneServer()->timezone('Europe/London')->group(function (): void {
+    Schedule::job(new PruneExports)->name('prune-exports');
+    Schedule::job(new SendDigests)->name('send-digests');
+});
+```
 
 ---

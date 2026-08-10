@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Patterns
 
-Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 55 rules across 9 sections.
+Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 59 rules across 9 sections.
 
 **Core philosophy: practicality over purity. Never take a greedy decision.**
 
@@ -43,12 +43,25 @@ Run the Decision Gate before writing any class: `references/decision-gate.md`.
 Q1. Single end-to-end use case?              → ACTION
 Q2. Called by 2+ Actions, or worth isolating? → SERVICE
 Q3. Used in only one Action?                  → KEEP IT IN THE ACTION
-Q4. Simple CRUD / one-off query?              → ELOQUENT DIRECTLY
+Q4. Single-record CRUD (find / create /
+    update / delete)?                         → ELOQUENT DIRECTLY
+                                                (from an Action or Repository)
 Q5. Backend may swap, OR the query earns a
     name and its own tests?                   → REPOSITORY (+ Query Classes)
 ```
 
-Ambiguous between Q4 and Q5? Choose Q4.
+Ambiguous between Q4 and Q5? Choose Q4 — except for a list endpoint, which is always Q5.
+
+## Non-Negotiables
+
+These are the mistakes that survive review because each one looks locally reasonable:
+
+- Query construction never appears in a Controller, Form Request, Resource, Blade view or Middleware — however small the query is.
+- A paginated, filtered or ownership-scoped list is a named query behind a Repository, not "simple CRUD".
+- An Action that only forwards to one collaborator is deleted; the caller calls the collaborator.
+- An interface, its implementation and its container binding land in the same change. Never an empty `Repositories/`.
+- One concept has one home: a shared module owns the mechanism, each domain owns the content describing its own data.
+- Every route is authorized in exactly one place — see the `laravel-http` skill.
 
 ## Rule Sections by Priority
 
@@ -74,6 +87,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `gate-eloquent-directly-by-default` — Use Eloquent directly by default
 - `gate-repository-earns-its-name` — A Repository must name its trigger
 - `gate-query-class-and-repository-together` — Query Classes and Repositories arrive together
+- `gate-reads-go-through-a-named-query` — A list endpoint is a named query
 
 ### 2. Actions (HIGH)
 
@@ -81,6 +95,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `action-keep-single-use-logic-inline` — Keep single-use logic inside the Action
 - `action-naming-verb-noun` — Name Actions `<Verb><Noun>Action`
 - `action-maps-request-to-value-objects` — Map HTTP input to domain types at the edge
+- `action-not-a-pass-through` — Never create an Action that only forwards
 
 ### 3. Services (HIGH)
 
@@ -99,6 +114,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `repo-no-base-repository` — No generic `BaseRepository`
 - `repo-small-focused-interface` — Keep Repository interfaces under ~6 methods
 - `repo-bind-in-service-provider` — Bind the interface in a service provider
+- `repo-ship-implementation-and-binding` — Interface, implementation and binding in one change
 - `repo-inline-simple-delegate-complex` — Inline simple queries, delegate complex ones
 
 ### 5. Query Classes (HIGH)
@@ -131,6 +147,7 @@ Ambiguous between Q4 and Q5? Choose Q4.
 - `layout-no-top-level-service-repository-query` — No top-level layer folders
 - `layout-optional-folders-are-deliberate` — A missing folder is a decision
 - `layout-contracts-vs-support` — `Contracts/` holds interfaces, `Support/` holds implementations
+- `layout-shared-module-owns-mechanism` — A shared module owns the mechanism, not other domains' messages
 
 ### 8. Inter-Domain Communication (HIGH)
 
@@ -156,7 +173,7 @@ Read on demand — do not load all of these at once:
 - `references/directory-layout.md` — full tree, folder meanings, CI guards
 - `references/inter-domain-decision-guide.md` — picking Event vs Open Host Service vs Shared Kernel vs ACL
 - `references/anti-patterns.md` — 18 forbidden patterns with their grep signals
-- `references/pre-completion-checklist.md` — 28-question self-check before declaring done
+- `references/pre-completion-checklist.md` — 31-question self-check before declaring done
 - `examples/orders-domain/` — one worked vertical slice with every layer in place
 
 ## How to Use

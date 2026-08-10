@@ -1,6 +1,6 @@
 # Laravel Skills
 
-Opinionated Laravel engineering skills for AI coding agents. 166 rules across five skills, built for domain-driven Laravel applications.
+Opinionated Laravel engineering skills for AI coding agents. 173 rules across five skills, built for domain-driven Laravel applications.
 
 Skills follow the [Agent Skills](https://agentskills.io/) format and work with Claude Code, Cursor, Copilot and anything else that reads `SKILL.md`.
 
@@ -40,7 +40,7 @@ cp -r skills/skills/laravel-patterns ~/.claude/skills/
 
 ### laravel-patterns
 
-Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 55 rules.
+Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 59 rules.
 
 **Use when:**
 
@@ -68,7 +68,7 @@ Data-layer engineering: what goes *inside* a Query Class. 36 rules.
 
 ### laravel-http
 
-The edge: translating HTTP into domain types and back. 29 rules.
+The edge: translating HTTP into domain types and back. 31 rules.
 
 **Use when:**
 
@@ -81,7 +81,7 @@ The edge: translating HTTP into domain types and back. 29 rules.
 
 ### laravel-async
 
-Work that happens outside the request. 28 rules.
+Work that happens outside the request. 29 rules.
 
 **Use when:**
 

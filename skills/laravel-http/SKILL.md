@@ -11,9 +11,15 @@ metadata:
 
 # Laravel HTTP
 
-Rules for the edge of a Laravel application: 29 rules across 6 sections.
+Rules for the edge of a Laravel application: 31 rules across 6 sections.
 
 The edge has one job — translate HTTP into domain types and back. `Illuminate\Http\Request` stops at the controller or Form Request; nothing inward ever sees it. See the `laravel-patterns` skill for what happens after that.
+
+## Non-Negotiables
+
+- Exactly one authorization site per route. Never a Form Request `authorize()` and a controller `Gate::authorize()` on the same route.
+- No query construction in a controller, Form Request, Resource or Blade view — including a single `where()` with `paginate()`, and including relations read off `$request->user()`.
+- Any parameter carrying a password, token, key or raw personal data is marked `#[\SensitiveParameter]`.
 
 ## When to Apply
 
@@ -39,6 +45,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 ### 1. Authorization (CRITICAL)
 
 - `authz-check-before-the-domain-runs` — Authorize at the edge, before the Action executes
+- `authz-exactly-one-authorization-site` — One authorization site per route, never two
 - `authz-policies-per-model` — Put the rule in a Policy, not in a conditional
 - `authz-never-trust-request-ids` — An ID in a request is a claim, not a fact
 
@@ -75,6 +82,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - `error-named-constructors` — A named constructor per failure mode
 - `error-map-status-centrally` — Map exceptions to status once, in the handler
 - `error-never-leak-internals` — Log the detail, return a stable message
+- `error-sensitive-parameter-attribute` — Mark secret parameters `#[\SensitiveParameter]`
 
 ### 6. Controllers (MEDIUM-HIGH)
 
@@ -91,6 +99,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 | First-party JSON:API resources | Laravel 13+ |
 | `PreventRequestForgery` (origin-aware CSRF) | Laravel 13+ |
 | `->scopeBindings()`, `->missing()` | Laravel 9+ |
+| `#[\SensitiveParameter]` | PHP 8.2+ |
 | `bootstrap/app.php` exception configuration | Laravel 11+ |
 
 ## Reference Material

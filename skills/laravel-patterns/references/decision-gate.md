@@ -8,6 +8,7 @@ Run this before creating any Service, Repository, Query Class or Value Object, a
 
 | # | Question | If yes |
 |---|----------|--------|
+| Q0 | Is it a read with no state change, no transaction, no event and no second collaborator? | **No Action.** The entry point calls the Repository (or Eloquent) directly. |
 | Q1 | Is it orchestrating a single end-to-end use case (HTTP or job entry → result)? | **Action** — `app/Domain/<Context>/Actions/<Verb><Noun>Action.php` |
 | Q2 | Is it called from more than one Action, or complex enough to deserve testing in isolation from the orchestration? | **Service** — `app/Domain/<Context>/Services/<Name>Service.php` |
 | Q3 | Is it used in only one Action? | **Keep it in that Action.** Do not extract. |
@@ -16,12 +17,16 @@ Run this before creating any Service, Repository, Query Class or Value Object, a
 
 | # | Question | If yes |
 |---|----------|--------|
-| Q4 | Is it simple CRUD, or a one-off read/write that will almost certainly stay on Eloquent forever? | **Eloquent directly.** No Repository, no Query Class, no interface. |
+| Q4 | Is it single-record work — `find()`, a route-bound model, `create()`, `$model->update()`, `delete()`? | **Eloquent directly**, from an Action or a Repository. No interface. |
 | Q5 | Is it either (a) likely to switch backends, or (b) named / important / reused / complex enough to deserve its own name and dedicated tests? | **Repository** — interface in `Contracts/`, implementation in `Repositories/`, complex queries delegated to `Queries/`. |
 
 ## Hard rules
 
 - If Q4 and Q5 feel ambiguous, choose **Q4**. "Maybe someday" is not a trigger.
+- A paginated, filtered or ownership-scoped **list is always Q5** — it has ordering, a page-size cap and an ownership constraint that must live in one place.
+- "Eloquent directly" means from an **Action, a Repository or a Query Class**. Never from a Controller, Form Request, Resource, Blade view or Middleware.
+- An Action that only forwards to one collaborator is not an Action. Delete it and let the entry point call the collaborator (Q0).
+- An interface without an implementation and a container binding is not shippable. All three land together.
 - The trigger for a Query Class and a Repository is the same. Never create a Query Class without a Repository around it; never create a Repository whose methods never delegate to one.
 - Both extremes are bugs: a Repository for every model, and no repositories at all.
 
@@ -49,6 +54,6 @@ Controller / Action / Service / Command
 |-------|-----|-----------------|
 | **Action** | Orchestrate one use case end to end | Controller, Job, Command |
 | **Service** | One business decision reused by 2+ Actions | Actions, other Services |
-| **Repository** | The only public data-access boundary | Actions, Services, Commands |
+| **Repository** | The only public data-access boundary | Actions, Services, Commands, and Controllers for plain reads |
 | **Query Class** | One named query; the only place query construction lives | **Repository implementations only** |
 | **Value Object** | Group related parameters; pure data + pure predicates | Any layer; read by Query Classes |

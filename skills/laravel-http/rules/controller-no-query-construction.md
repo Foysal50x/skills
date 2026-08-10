@@ -9,7 +9,14 @@ tags: controller, query, boundary, architecture
 
 `where()`, `orderBy()`, `with()` and `join()` do not appear in a controller. The controller builds Value Objects from the request and calls the Repository; the Query Class writes the clauses.
 
-The same applies to Blade: a view receives data, it does not fetch it.
+This holds however small the query looks. It includes:
+
+- a single `where()` plus `paginate()` — a list is a named query, not simple CRUD
+- a relation read off the authenticated user, `$request->user()->notifications()->…`
+- `->when($request->boolean('unread'), …)` — an optional filter is a query rule
+- a page size taken from the request, and `latest()` / `orderBy()` defaults
+
+The same applies to a Blade view and to a Form Request: a view receives data, it does not fetch it, and `authorize()`/`rules()` never build a result set.
 
 **Incorrect (filters built in the controller, duplicated in the export endpoint):**
 
@@ -27,6 +34,23 @@ public function index(Request $request): View
 }
 ```
 
+**Incorrect (small enough to feel harmless — still four query rules at the edge):**
+
+```php
+final class ListNotificationsController
+{
+    public function __invoke(Request $request): AnonymousResourceCollection
+    {
+        $notifications = $request->user()->notifications()
+            ->when($request->boolean('unread'), fn (Builder $query): Builder => $query->whereNull('read_at'))
+            ->latest()
+            ->paginate(min((int) $request->input('per_page', 15), 100));
+
+        return NotificationResource::collection($notifications);
+    }
+}
+```
+
 **Correct:**
 
 ```php
@@ -38,4 +62,18 @@ public function __invoke(SearchOrdersRequest $request, OrderRepositoryInterface 
 }
 ```
 
-The sort column is now whitelisted inside the Query Class rather than passed raw from the request. See the `laravel-patterns` skill for the full boundary.
+```php
+final class ListNotificationsController
+{
+    public function __invoke(
+        ListNotificationsRequest $request,
+        NotificationRepositoryInterface $notifications,
+    ): AnonymousResourceCollection {
+        return NotificationResource::collection(
+            $notifications->feedFor($request->user(), $request->toFilter()),
+        );
+    }
+}
+```
+
+The sort column is whitelisted and the page-size cap lives in the filter Value Object, not in a controller expression. See the `laravel-patterns` skill for the full boundary.

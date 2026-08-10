@@ -11,6 +11,8 @@ Q4 of the Decision Gate, and the default answer whenever Q4 and Q5 feel ambiguou
 
 A Repository over Eloquent does not fully decouple you from Eloquent anyway: relationships, accessors and scopes remain. That is acceptable and expected. Do not chase purity.
 
+"Directly" names the layer, not the file. Eloquent may be called from an Action, a Repository implementation or a Query Class — never from a Controller, a Form Request, a Resource, a Blade view or a Middleware. And it does not cover list endpoints: a paginated, filtered or ownership-scoped list is a named query, not simple CRUD. See `rules/gate-reads-go-through-a-named-query.md`.
+
 **Incorrect (a layer that only forwards):**
 
 ```php

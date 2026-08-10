@@ -22,3 +22,8 @@ Each entry names the signal to grep for and the correct move.
 | 16 | **`env()` outside `config/`** | `env(` in `app/`, `routes/`, `database/` | Read `config()`; `config:cache` makes `env()` return null |
 | 17 | **Cross-domain Model import** | `use App\Domain\<Other>\Models\…` | Domain Event, or an Open Host Service returning DTOs |
 | 18 | **Top-level layer folders** | `app/Services/`, `app/Repositories/`, `app/Queries/` | Domain-first layout under `app/Domain/<Context>/` |
+| 19 | **Contract with no implementation** | an interface in `Contracts/` with an empty `Repositories/`, or no `bind()` for it | Ship interface, implementation and binding in one change |
+| 20 | **Pass-through Action** | a `handle()` whose whole body is `return $this->x->y(...$args);` | Delete it; the entry point calls the collaborator |
+| 21 | **List query at the edge** | `paginate(` or `->latest()` in a Controller, Form Request, Resource or Blade view | A named Repository method with a Query Class behind it |
+| 22 | **One concept, two homes** | the same class name under two domains, or a shared domain importing another domain's Models | Shared module owns the mechanism; each domain owns its own messages |
+| 23 | **Secret as a plain parameter** | a password, key or token parameter with no `#[\SensitiveParameter]`, or one passed to a queued job's constructor | Mark the parameter; pass an identifier to jobs and resolve the secret in `handle()` |

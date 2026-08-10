@@ -7,7 +7,7 @@ tags: authorization, security, policies, form-request
 
 ## Authorize Before the Domain Runs
 
-Every request that reads or writes non-public data is authorized at the edge, before the Action executes. The three places that qualify: a Form Request's `authorize()`, a controller `authorize()` call, or route middleware.
+Every request that reads or writes non-public data is authorized at the edge, before the Action executes. The three places that qualify: a Form Request's `authorize()`, a controller `authorize()` call, or route middleware. Choose one of them per route and only one — see `rules/authz-exactly-one-authorization-site.md`.
 
 Authorization inside the Action is too late in one important way — it mixes the access decision with the use case, so the same Action called from a console command silently enforces a user policy that has no user.
 

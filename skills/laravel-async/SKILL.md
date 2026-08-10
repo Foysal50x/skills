@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Async
 
-Rules for work that happens outside the request: 28 rules across 5 sections.
+Rules for work that happens outside the request: 29 rules across 5 sections.
 
 Two assumptions run through all of them:
 
@@ -44,6 +44,7 @@ Two assumptions run through all of them:
 - `job-queue-slow-work` — Queue anything slow or externally dependent
 - `job-retries-and-backoff` — Set tries, backoff and timeout on every job
 - `job-serialize-ids-not-models` — Pass identifiers, not object graphs
+- `job-never-serialize-secrets` — A credential never enters a job payload
 - `job-unique-jobs` — Collapse duplicate dispatches with `ShouldBeUnique`
 - `job-batches-and-chains` — Batches for fan-out, chains for ordered steps
 - `job-handle-failure-explicitly` — Decide what happens after the last attempt

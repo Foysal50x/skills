@@ -82,6 +82,7 @@ app/
 - `Queries/` is internal: only that domain's `Repositories/` may import from it.
 - Generic Value Objects are grouped by concept under `app/Support/Filters/<Concept>/`. A lone Value Object may sit at the `Filters/` root.
 - Never create top-level `app/Services/`, `app/Repositories/` or `app/Queries/`.
+- A cross-cutting domain (Notification, Reporting, Export) owns the mechanism — channels, preferences, the feed and its endpoints. Each business domain keeps the message classes that describe its own data, in `Domain/<Context>/Notifications/`. One concept never has two homes.
 - Model scopes are fine for small reusable constraints; a Query Class may compose them.
 
 ## CI guards
@@ -96,4 +97,14 @@ grep -rln 'use App\\Domain\\[A-Za-z]*\\Queries\\' app --include='*.php' \
 
 # No env() outside config/
 grep -rn '\benv(' app routes database --include='*.php' && exit 1 || true
+
+# No query construction at the edge
+grep -rnE '->(where|orderBy|latest|paginate|with)\(' \
+  app/Domain/*/Http app/Http --include='*.php' && exit 1 || true
+
+# Every domain contract has an implementation
+for interface in app/Domain/*/Contracts/*Interface.php; do
+  name=$(basename "$interface" .php)
+  grep -rq "implements .*${name%Interface}" app/Domain || { echo "unimplemented: $name"; exit 1; }
+done
 ```

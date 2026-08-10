@@ -176,6 +176,53 @@ Test it by calling `handle()` twice and asserting the same end state.
 
 ---
 
+## Never Put a Secret in a Job Payload
+
+A dispatched job is serialized to JSON and stored in plaintext — in Redis, or in the `jobs` table, or on SQS. If it fails it is copied into `failed_jobs` and kept until someone prunes it, and Horizon renders the payload in a browser for anyone with dashboard access. A password or API key passed to a constructor is now sitting in three places with none of the protection the `.env` had.
+
+`#[\SensitiveParameter]` does not help here: it redacts stack traces, not serialization. Pass a reference and resolve the secret inside `handle()`, where it lives for the length of one execution.
+
+**Incorrect (the credential is written to the queue store and survives in `failed_jobs`):**
+
+```php
+final class SyncIntegrationJob implements ShouldQueue
+{
+    public function __construct(
+        private readonly int $integrationId,
+        private readonly string $apiKey,
+        private readonly string $webhookSecret,
+    ) {}
+}
+
+SyncIntegrationJob::dispatch($integration->id, $integration->api_key, $integration->webhook_secret);
+```
+
+**Correct (identity in the payload, secret read at execution time):**
+
+```php
+final class SyncIntegrationJob implements ShouldQueue
+{
+    public function __construct(private readonly int $integrationId) {}
+
+    public function handle(IntegrationRepositoryInterface $integrations, GatewayClientFactory $clients): void
+    {
+        $integration = $integrations->find($this->integrationId);
+
+        if ($integration === null) {
+            return;
+        }
+
+        $clients->for($integration)->sync();   // decrypts the credential here, in memory
+    }
+}
+
+SyncIntegrationJob::dispatch($integration->id);
+```
+
+The same applies to `Notification` and `Mailable` constructors — both are serialized when queued. Store credentials encrypted (`encrypted` cast, or a secrets manager) and read them through the repository that owns them. See `rules/job-serialize-ids-not-models.md` for the non-secret version of this rule.
+
+---
+
 ## Queue Anything Slow or Externally Dependent
 
 Report generation, exports, webhook delivery, image processing, third-party API calls, bulk mail — none of these belong in a request cycle. A slow upstream should not turn into a slow endpoint, and a failing upstream should not turn into a failed request.
@@ -325,6 +372,8 @@ final class SendOrderConfirmation implements ShouldQueue
     }
 }
 ```
+
+Credentials are the strict version of the same rule: they never enter a payload at all, whatever their size — see `rules/job-never-serialize-secrets.md`.
 
 Always handle the missing-row case. Between dispatch and execution the record can be deleted, and `findOrFail()` there means a failed job for something that is not a failure. Alternatively add `#[DeleteWhenMissingModels]` (or `public bool $deleteWhenMissingModels = true`).
 

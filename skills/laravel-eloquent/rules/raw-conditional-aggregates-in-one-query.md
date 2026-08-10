@@ -47,3 +47,5 @@ final readonly class OrderStatsQuery
 ```
 
 `toBase()` skips model hydration — there is no model here, only numbers. Cache the result if the panel is hit on every page load.
+
+Add `toBase()` when the result is a row of scalars rather than models — it skips hydration entirely, which is the whole point of collapsing the counts into one query.

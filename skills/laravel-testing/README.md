@@ -2,7 +2,7 @@
 
 Test strategy for a layered Laravel application: which style fits each layer, fakes over mocks, and what to assert.
 
-18 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+20 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 

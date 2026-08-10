@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Patterns
 
-Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 59 rules across 9 sections.
+Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 60 rules across 9 sections.
 
 **Core philosophy: practicality over purity. Never take a greedy decision.**
 
@@ -78,6 +78,7 @@ These are the mistakes that survive review because each one looks locally reason
 | Code that touches another domain | `domain-no-cross-domain-models`, `domain-events-for-reactions` |
 | A notification, report or export class | `layout-shared-module-owns-mechanism` |
 | Anything reading configuration | `config-never-env-outside-config` |
+| A sort or filter arriving as a string | `vo-named-constructor-parses-input` |
 | A file you cannot place | `layout-scope-based-co-location` |
 
 ## Build Order
@@ -176,6 +177,7 @@ A vertical slice lands in this order — each step exists only if the step above
 - `vo-date-range-and-presets` — Express named date ranges through an interface
 - `vo-parameterized-presets` — Parameterize presets instead of copying classes
 - `vo-composite-filter-per-query` — Collapse a query's inputs into one composite filter
+- `vo-named-constructor-parses-input` — Parse the wire format in a named constructor
 
 ### 7. Directory and Namespace Layout (MEDIUM)
 

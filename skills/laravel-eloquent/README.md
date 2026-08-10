@@ -2,7 +2,7 @@
 
 Data-layer engineering: N+1 elimination, pagination strategy, transactions, casts, scopes, raw SQL placement and bulk operations.
 
-36 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+45 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 

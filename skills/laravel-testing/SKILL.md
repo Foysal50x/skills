@@ -12,7 +12,7 @@ metadata:
 
 # Laravel Testing
 
-Test strategy for a layered Laravel application: 18 rules across 5 sections. Examples use Pest; every rule applies equally to PHPUnit.
+Test strategy for a layered Laravel application: 20 rules across 5 sections. Examples use Pest; every rule applies equally to PHPUnit.
 
 The organizing idea: **each layer has one test style that fits it.** Testing an Action against a real database, or a Query Class against a mock, produces a slow suite that breaks on refactors and misses real bugs.
 
@@ -48,6 +48,8 @@ The organizing idea: **each layer has one test style that fits it.** Testing an 
 | A test that a job or event fired | `http-assert-side-effects-dispatched`, `fake-framework-facades` |
 | A test involving dates or randomness | `fake-time-and-randomness` |
 | A test for a Value Object | `vo-test-predicates-directly`, `vo-never-hand-a-builder` |
+| A test for code that calls an API | `fake-http-prevent-stray-requests` |
+| A test for queued mail or notifications | `fake-assert-queued-not-sent` |
 | A test that feels pointless to write | `strategy-if-testing-feels-silly` |
 
 ## Before You Write Code
@@ -83,6 +85,8 @@ The organizing idea: **each layer has one test style that fits it.** Testing an 
 - `fake-framework-facades` — `Queue::fake()`, `Event::fake()`, `Http::fake()` and friends
 - `fake-never-mock-eloquent` — Never mock Eloquent or the query builder
 - `fake-time-and-randomness` — Freeze time, seed randomness
+- `fake-http-prevent-stray-requests` — Fake the HTTP client and forbid stray requests
+- `fake-assert-queued-not-sent` — `assertQueued()` for anything `ShouldQueue`
 
 ### 3. Database Tests (HIGH)
 

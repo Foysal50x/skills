@@ -199,6 +199,48 @@ Fake the boundary, not the framework. A hand-written fake implementing your own 
 
 ---
 
+## Assert Queued Mail and Notifications With assertQueued()
+
+`Mail::assertSent()` inspects messages sent synchronously. A `Mailable` that implements `ShouldQueue` is never sent that way, so the assertion fails — and the usual reaction is to delete `ShouldQueue` until the test goes green, which puts SMTP back in the request.
+
+Match the assertion to how the message is dispatched: `assertQueued()` for `ShouldQueue`, `assertSent()` for everything else.
+
+**Incorrect (the assertion is wrong, and the class gets "fixed"):**
+
+```php
+it('emails the statement', function (): void {
+    Mail::fake();
+
+    (new CloseBillingPeriodAction)->handle($account);
+
+    Mail::assertSent(StatementReady::class);   // StatementReady implements ShouldQueue
+});
+```
+
+**Correct:**
+
+```php
+it('queues the statement email', function (): void {
+    Mail::fake();
+    Notification::fake();
+
+    (new CloseBillingPeriodAction)->handle($account);
+
+    Mail::assertQueued(
+        StatementReady::class,
+        fn (StatementReady $mail): bool => $mail->hasTo($account->billingEmail),
+    );
+
+    Notification::assertSentTo($account->owner, InvoicePaid::class);
+});
+```
+
+`Notification::fake()` records queued and unqueued notifications alike, so `assertSentTo()` is right either way — the split only affects mail.
+
+Keep content assertions separate: build the mailable directly and use `assertSeeInHtml()` in its own test. A test that asserts both dispatch and wording breaks twice for one copy change.
+
+---
+
 ## Fake Framework Boundaries With the Built-In Fakes
 
 Laravel's fakes record calls instead of performing them, and give you assertions over what was recorded. Use them for anything that leaves the process.
@@ -251,6 +293,52 @@ it('retries the upstream call', function (): void {
 ```
 
 `Event::fake()` with no arguments suppresses *every* event, including model events other assertions rely on. Pass the specific classes.
+
+---
+
+## Fake the HTTP Client and Forbid Stray Requests
+
+`Http::fake()` alone only stubs the URLs you remembered. Anything else still leaves the machine: the suite is slow, fails when the provider is down, and can write real data through a forgotten `POST`.
+
+`Http::preventStrayRequests()` turns every unfaked call into a failed test that names the URL — which is how you find the call site you did not know about.
+
+**Incorrect (one endpoint faked, the rest live):**
+
+```php
+it('imports the customer', function (): void {
+    Http::fake(['api.crm.test/v1/customers/*' => Http::response(['name' => 'Ada'])]);
+
+    (new ImportCustomerAction)->handle(42);   // the address-lookup call still goes out
+});
+```
+
+**Correct:**
+
+```php
+it('imports the customer', function (): void {
+    Http::preventStrayRequests();
+
+    Http::fake([
+        'api.crm.test/v1/customers/42' => Http::response(['name' => 'Ada', 'postcode' => 'SW1A']),
+        'api.post.test/*' => Http::response(['line_1' => '10 Downing St']),
+    ]);
+
+    $customer = (new ImportCustomerAction)->handle(42);
+
+    expect($customer->address->line1)->toBe('10 Downing St');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.crm.test/v1/customers/42');
+});
+```
+
+Test the failure paths too — they are the ones no staging environment reproduces:
+
+```php
+Http::fake(['api.crm.test/*' => Http::failedConnection()]);
+Http::fake(['api.crm.test/*' => Http::response(['message' => 'slow down'], 429)]);
+```
+
+Put `preventStrayRequests()` in the base `TestCase` so a new test cannot opt out by forgetting. See the `laravel-rest-api` skill for the client rules these tests are proving.
 
 ---
 

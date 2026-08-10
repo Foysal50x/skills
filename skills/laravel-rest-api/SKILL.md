@@ -1,6 +1,6 @@
 ---
 name: laravel-rest-api
-description: REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Use when writing or reviewing routes, controllers, form requests, API resources, policies or exception handling in a Laravel application.
+description: REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Also covers outbound calls: HTTP client timeouts, retries, status handling and pooling. Use when writing or reviewing routes, controllers, form requests, API resources, policies, exception handling, or any call to a third-party API in a Laravel application.
 license: MIT
 metadata:
   author: Foysal Ahmed
@@ -11,7 +11,7 @@ metadata:
 
 # Laravel HTTP
 
-Rules for the edge of a Laravel application: 31 rules across 6 sections.
+Rules for the edge of a Laravel application, inbound and outbound: 35 rules across 7 sections.
 
 The edge has one job — translate HTTP into domain types and back. `Illuminate\Http\Request` stops at the controller or Form Request; nothing inward ever sees it. See the `laravel-patterns` skill for what happens after that.
 
@@ -20,6 +20,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - Exactly one authorization site per route. Never a Form Request `authorize()` and a controller `Gate::authorize()` on the same route.
 - No query construction in a controller, Form Request, Resource or Blade view — including a single `where()` with `paginate()`, and including relations read off `$request->user()`.
 - Any parameter carrying a password, token, key or raw personal data is marked `#[\SensitiveParameter]`.
+- Every outbound call sets a timeout and decides what each status code means. No test reaches the network.
 
 ## When to Apply
 
@@ -42,6 +43,9 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 | A `throw` | `error-context-specific-exception-classes`, `error-map-status-centrally` |
 | A function taking a password, token or key | `error-sensitive-parameter-attribute` |
 | A route file entry | `route-model-binding-over-manual-lookup`, `route-cacheable-controller-routes` |
+| A call to a third-party API | `client-explicit-timeouts`, `client-handle-status-explicitly` |
+| A call that fails intermittently | `client-retry-with-backoff` |
+| Several independent API calls | `client-pool-concurrent-requests` |
 
 ## Before You Write Code
 
@@ -61,6 +65,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 | 4 | API Serialization | HIGH | `resource-` |
 | 5 | Errors and Exceptions | MEDIUM-HIGH | `error-` |
 | 6 | Controllers | MEDIUM-HIGH | `controller-` |
+| 7 | Outbound HTTP | MEDIUM-HIGH | `client-` |
 
 ## Quick Reference
 
@@ -112,6 +117,13 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - `controller-invokable-single-action` — Prefer single-action invokable controllers
 - `controller-no-query-construction` — A controller constructs no queries
 - `controller-attributes-for-middleware-and-authorization` — `#[Middleware]` / `#[Authorize]` (Laravel 13)
+
+### 7. Outbound HTTP (MEDIUM-HIGH)
+
+- `client-explicit-timeouts` — A timeout and a connect timeout on every call
+- `client-retry-with-backoff` — Retry transient failures only, with increasing delays
+- `client-handle-status-explicitly` — Throw, or handle the status; never parse an error body
+- `client-pool-concurrent-requests` — Pool independent calls instead of waiting three times
 
 ## Version Notes
 

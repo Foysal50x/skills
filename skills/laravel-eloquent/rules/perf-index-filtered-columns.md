@@ -45,3 +45,5 @@ Schema::create('orders', function (Blueprint $table): void {
 ```
 
 Verify with `EXPLAIN`, not by eye. An index that is never chosen is write cost with no read benefit — drop it.
+
+A multi-column `ORDER BY` needs a compound index in the same column order — `orderBy('last_name')->orderBy('first_name')` uses `index(['last_name', 'first_name'])` and cannot combine two single-column indexes. The index is declared in the migration that creates the table: see `rules/migration-constrained-foreign-keys.md` for what `constrained()` already indexes for you.

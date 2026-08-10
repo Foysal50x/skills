@@ -30,12 +30,17 @@ The section ID (in parentheses) is the filename prefix used to group rules.
 **Impact:** MEDIUM-HIGH
 **Description:** Reusable constraints belong on the model as scopes. Choose a global scope or a named scope for a given filter — not both.
 
-## 6. Raw SQL and Query Expressions (raw)
+## 6. Migrations and Schema (migration)
+
+**Impact:** MEDIUM-HIGH
+**Description:** A migration is the only description of the schema that every environment agrees on. It is immutable once deployed, it holds structure rather than data, and it declares the constraints and indexes the queries above depend on.
+
+## 7. Raw SQL and Query Expressions (raw)
 
 **Impact:** MEDIUM
 **Description:** JOINs, CTEs, aggregates and raw expressions are allowed and often necessary — but only inside Query Classes and Repositories, and preferably as type-safe expressions rather than `DB::raw()`.
 
-## 7. Bulk Operations (bulk)
+## 8. Bulk Operations (bulk)
 
 **Impact:** MEDIUM
 **Description:** Loops that write one row at a time are the slowest thing in most import and sync jobs. Bulk operations trade model events for orders of magnitude.

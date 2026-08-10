@@ -2,7 +2,7 @@
 
 Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent.
 
-59 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+60 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 

@@ -1,6 +1,6 @@
 # laravel-rest-api
 
-REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Use when writing or reviewing routes, controllers, form requests, API resources, policies or exception handling in a Laravel application.
+REST API and HTTP-edge rules for Laravel — authorization before the domain runs, validation and DTO construction in Form Requests, scoped route model binding for nested resources, JSON output through Resources, thin controllers, and domain exceptions mapped to status codes centrally. Also covers outbound calls: HTTP client timeouts, retries, status handling and pooling. Use when writing or reviewing routes, controllers, form requests, API resources, policies, exception handling, or any call to a third-party API in a Laravel application.
 
 > Compiled from `rules/*.md` by `scripts/build-agents.mjs`. Do not edit by hand.
 
@@ -1418,5 +1418,156 @@ final class StoreOrderController
 ```
 
 The Action now runs identically from the CSV importer and the test suite.
+
+---
+
+# 7. Outbound HTTP
+
+**Impact: MEDIUM-HIGH**
+
+Calls leaving the application need the same discipline as calls arriving: an explicit timeout, a retry policy that cannot amplify an outage, a decision per status code, and no request in a test that reaches the network.
+
+---
+
+## Set an Explicit Timeout on Every Outbound Call
+
+The default request timeout is 30 seconds and the connect timeout is unbounded on some setups. One unhealthy upstream then holds a PHP-FPM worker per request until it answers, and a queue of waiting requests takes the application down with it — even though your own code is fine.
+
+Set `timeout()` and `connectTimeout()` on every call. Connecting should take a fraction of a second on a healthy network; waiting three seconds for a TCP handshake is already a failure.
+
+**Incorrect (a 30-second worst case, discovered during an incident):**
+
+```php
+$response = Http::withToken($token)->get('https://api.shipping.test/v1/rates');
+```
+
+**Correct (defined once per integration, not per call site):**
+
+```php
+// AppServiceProvider::boot()
+Http::macro('shipping', fn (): PendingRequest => Http::baseUrl(config('shipping.base_url'))
+    ->withToken(config('shipping.token'))
+    ->connectTimeout(2)
+    ->timeout(5));
+```
+
+```php
+// In the Anti-Corruption Layer adapter
+$response = Http::shipping()->get('/v1/rates', ['postcode' => $postcode->value()]);
+```
+
+Pick the number from the caller's budget, not the upstream's promise: a call inside a web request gets seconds, the same call inside a queued job can afford more. When the upstream is genuinely slow, move the call into a job rather than raising the timeout — see the `laravel-async` skill.
+
+The adapter belongs in `app/Infrastructure/`; see the `laravel-patterns` skill's anti-corruption layer rule.
+
+---
+
+## Decide What Each Response Status Means
+
+Laravel's HTTP client does not throw on 4xx or 5xx. `$response->json()` on a failed call returns the provider's error envelope, which then flows into your domain as if it were the payload — a null price, an empty collection, a boolean that is always false.
+
+Every call decides: throw, or handle the status. Nothing is left to the default.
+
+**Incorrect (an error body treated as a rate):**
+
+```php
+$rates = Http::shipping()->get('/v1/rates')->json('rates');   // null on a 500, empty on a 404
+
+return collect($rates)->min('amount');
+```
+
+**Correct (throw when there is nothing sensible to do):**
+
+```php
+$response = Http::shipping()->get('/v1/rates')->throw();
+
+return ShippingRates::fromArray($response->json('rates'));
+```
+
+**Correct (handle the statuses that carry meaning):**
+
+```php
+$response = Http::shipping()->get("/v1/shipments/{$reference}");
+
+return match (true) {
+    $response->successful() => Shipment::fromArray($response->json()),
+    $response->notFound() => null,
+    $response->status() === 429 => throw ShippingUnavailable::rateLimited(
+        retryAfter: (int) $response->header('Retry-After'),
+    ),
+    default => throw ShippingUnavailable::from($response->status()),
+};
+```
+
+Translate the upstream's failure into your own exception type at the adapter boundary, so the domain never sees a `RequestException` — and map that exception to a status once, centrally. See `rules/error-context-specific-exception-classes.md` and `rules/error-map-status-centrally.md`.
+
+---
+
+## Pool Independent Outbound Requests
+
+Three sequential calls of 300 ms each cost 900 ms of a request nobody can cancel. When the calls do not depend on one another, `Http::pool()` issues them concurrently and the page waits once.
+
+Name each request with `as()` so the results are addressed by key rather than by position — positional indexes break the moment someone reorders the list.
+
+**Incorrect (latency added up):**
+
+```php
+$profile = Http::crm()->get("/v1/customers/{$id}")->json();
+$invoices = Http::billing()->get("/v1/customers/{$id}/invoices")->json();
+$tickets = Http::support()->get("/v1/customers/{$id}/tickets")->json();
+```
+
+**Correct:**
+
+```php
+$responses = Http::pool(fn (Pool $pool): array => [
+    $pool->as('profile')->withToken($crmToken)->timeout(5)->get("{$crm}/v1/customers/{$id}"),
+    $pool->as('invoices')->withToken($billingToken)->timeout(5)->get("{$billing}/v1/customers/{$id}/invoices"),
+    $pool->as('tickets')->withToken($supportToken)->timeout(5)->get("{$support}/v1/customers/{$id}/tickets"),
+]);
+
+return new CustomerOverview(
+    profile: $responses['profile']->throw()->json(),
+    invoices: $responses['invoices']->throw()->json('data'),
+    tickets: $responses['tickets']->successful() ? $responses['tickets']->json('data') : [],
+);
+```
+
+Pooled requests do not inherit a macro's configuration, so set the timeout and auth on each one. Each response still needs its own status decision — a pool that silently returns three error bodies is worse than three sequential calls that threw. If the caller does not need the result immediately, a queued job beats a pool.
+
+---
+
+## Retry Transient Failures With Backoff, Never Blindly
+
+Networks drop connections and upstreams return 503s. Retrying immediately turns one failed request into three in the same second, and retrying a non-idempotent `POST` can charge a card twice.
+
+Retry with increasing delays, and only for failures a retry can fix: connection errors and 5xx. A 422 is your payload being wrong — the same payload will be wrong again.
+
+**Incorrect (four instant attempts, including on a validation error):**
+
+```php
+$response = Http::retry(4)->post('https://api.payments.test/v1/charges', $payload);
+```
+
+**Correct:**
+
+```php
+$response = Http::payments()
+    ->retry([200, 1000, 4000], throw: false)
+    ->post('/v1/charges', [
+        'amount' => $amount->minorUnits(),
+        'idempotency_key' => $charge->uuid,   // the upstream deduplicates a repeated attempt
+    ]);
+```
+
+```php
+// Retry only what a retry can fix:
+$response = Http::inventory()->retry(3, 250, function (Throwable $e): bool {
+    return $e instanceof ConnectionException
+        || ($e instanceof RequestException && $e->response->serverError());
+})->get('/v1/stock');
+```
+
+The array form gives explicit per-attempt delays; the closure form decides per exception. Send an idempotency key on every retried write the upstream supports — without one, a retry after a timeout is a second charge, because the first request may well have succeeded before the connection dropped.
 
 ---

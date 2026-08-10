@@ -42,3 +42,5 @@ return Order::query()
 ```
 
 Wrap the iteration in a Query Class so the batching rule lives with the query.
+
+One trap in the list above: `cursor()` silently ignores `with()`, so every relation access inside the loop is a fresh query. Use `lazy()` or `lazyById()` when the loop reads relations, and keep `cursor()` for attribute-only passes.

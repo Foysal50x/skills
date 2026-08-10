@@ -34,3 +34,12 @@ Requirements and caveats:
 - Named closures need `->name('...')` so the lock key is stable across servers.
 
 The alternative — running the cron on only one designated node — creates a single point of failure. Prefer the lock.
+
+Shared settings belong on a group rather than repeated per entry — one place to change, and no task that quietly missed the flag:
+
+```php
+Schedule::daily()->onOneServer()->timezone('Europe/London')->group(function (): void {
+    Schedule::job(new PruneExports)->name('prune-exports');
+    Schedule::job(new SendDigests)->name('send-digests');
+});
+```

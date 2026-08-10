@@ -1,6 +1,6 @@
 # laravel-eloquent
 
-Eloquent and query-layer engineering rules for Laravel — eliminating N+1, choosing a pagination strategy, short atomic transactions, casts and scopes on the model, and where raw SQL is allowed. Use when writing or reviewing Eloquent models, migrations, query classes, repositories, exports or reporting queries, or when a Laravel endpoint is slow, leaking memory, or returning wrongly-typed columns.
+Eloquent and query-layer engineering rules for Laravel — eliminating N+1, choosing a pagination strategy, short atomic transactions, casts and scopes on the model, where raw SQL is allowed, and how migrations declare the schema those queries depend on. Use when writing or reviewing Eloquent models, migrations, query classes, repositories, exports or reporting queries, or when a Laravel endpoint is slow, leaking memory, or returning wrongly-typed columns.
 
 > Compiled from `rules/*.md` by `scripts/build-agents.mjs`. Do not edit by hand.
 
@@ -85,6 +85,8 @@ return Order::query()
 ```
 
 Wrap the iteration in a Query Class so the batching rule lives with the query.
+
+One trap in the list above: `cursor()` silently ignores `with()`, so every relation access inside the loop is a fresh query. Use `lazy()` or `lazyById()` when the loop reads relations, and keep `cursor()` for attribute-only passes.
 
 ---
 
@@ -206,6 +208,50 @@ Schema::create('orders', function (Blueprint $table): void {
 
 Verify with `EXPLAIN`, not by eye. An index that is never chosen is write cost with no read benefit — drop it.
 
+A multi-column `ORDER BY` needs a compound index in the same column order — `orderBy('last_name')->orderBy('first_name')` uses `index(['last_name', 'first_name'])` and cannot combine two single-column indexes. The index is declared in the migration that creates the table: see `rules/migration-constrained-foreign-keys.md` for what `constrained()` already indexes for you.
+
+---
+
+## Sort by a Related Value With a Subquery, Not a Join
+
+Joining a has-many to sort by one of its columns multiplies the parent row by the number of children. The page then contains duplicates, `paginate()`'s `COUNT` reports the joined total, and adding `distinct()` to fix it forces a sort of the whole result.
+
+A correlated subquery inside `orderBy()` sorts the parent rows without changing how many there are.
+
+**Incorrect (one order per payment, and a total nobody can explain):**
+
+```php
+return Order::query()
+    ->leftJoin('payments', 'payments.order_id', '=', 'orders.id')
+    ->orderByDesc('payments.created_at')
+    ->paginate(25);
+```
+
+**Correct:**
+
+```php
+public function scopeOrderByLastPaidAt(Builder $query, string $direction = 'desc'): void
+{
+    $query->orderBy(
+        Payment::select('created_at')
+            ->whereColumn('order_id', 'orders.id')
+            ->latest()
+            ->take(1),
+        $direction,
+    );
+}
+
+// In the Query Class
+return Order::query()
+    ->withLastPaidAt()
+    ->orderByLastPaidAt()
+    ->paginate(25);
+```
+
+Pair it with the `addSelect()` scope from `rules/perf-subquery-select-for-single-values.md` so the value you sorted by is also displayable, and index `(order_id, created_at)` on the child table.
+
+The direction still comes from an allow-list — see `rules/perf-index-filtered-columns.md` for the index and the `laravel-patterns` skill for the sortable-column whitelist.
+
 ---
 
 ## Turn Lazy Loading Into an Exception in Non-Production
@@ -267,6 +313,139 @@ return Order::query()
 ```
 
 Note the interaction with `preventAccessingMissingAttributes()`: a narrow select plus a Resource reading an unselected column now throws in development instead of returning `null` in production. That is the point.
+
+---
+
+## Close the Relationship Loop With setRelation()
+
+`load('items.product')` fills the downward path. The moment a view walks back up — `$item->order->number` — Eloquent fires one query per item for a parent that is already in memory, and `preventLazyLoading()` turns it into an exception rather than a fix.
+
+Hand the parent back to its children explicitly.
+
+**Incorrect (one query per line item for the order you are already holding):**
+
+```php
+$order->load('items.product');
+
+// resources/views/orders/show.blade.php
+@foreach ($order->items as $item)
+    {{ $item->order->number }} — {{ $item->product->name }}
+@endforeach
+```
+
+**Correct:**
+
+```php
+$order->load('items.product');
+$order->items->each->setRelation('order', $order);
+```
+
+For a collection of parents, do it per parent while the mapping is still known:
+
+```php
+$orders = Order::with('items.product')->get();
+
+$orders->each(fn (Order $order) => $order->items->each->setRelation('order', $order));
+```
+
+`setRelation()` only sets what is already loaded — it never queries. Do it in the Repository method that loaded the graph, not in the view, so every caller of that method gets the same closed loop.
+
+---
+
+## Pull a Single Related Value With a Subquery
+
+Eager-loading a whole has-many to read one column runs a second query and hydrates every row so you can discard all but one. A correlated subquery in `addSelect()` returns the value inside the query you were already running.
+
+Add `withCasts()` so the column arrives as a `CarbonImmutable`, an enum or a decimal rather than a raw string.
+
+**Incorrect (every payment loaded so one timestamp can be read):**
+
+```php
+$orders = Order::with('payments')->get();
+
+foreach ($orders as $order) {
+    echo $order->payments->max('created_at');
+}
+```
+
+**Correct (the value comes back on the row):**
+
+```php
+// On the model
+public function scopeWithLastPaidAt(Builder $query): void
+{
+    $query->addSelect([
+        'last_paid_at' => Payment::select('created_at')
+            ->whereColumn('order_id', 'orders.id')
+            ->latest()
+            ->take(1),
+    ])->withCasts(['last_paid_at' => 'immutable_datetime']);
+}
+
+// In the Query Class
+Order::query()->withLastPaidAt()->where('merchant_id', $merchantId);
+```
+
+When the whole related model is needed, select its key the same way and declare a `belongsTo` on that column — one extra query for the entire page, each row fully hydrated:
+
+```php
+public function lastPayment(): BelongsTo
+{
+    return $this->belongsTo(Payment::class, 'last_payment_id');
+}
+
+public function scopeWithLastPayment(Builder $query): void
+{
+    $query->addSelect([
+        'last_payment_id' => Payment::select('id')
+            ->whereColumn('order_id', 'orders.id')
+            ->latest()
+            ->take(1),
+    ])->with('lastPayment');
+}
+```
+
+The subquery needs an index on `(order_id, created_at)` to stay cheap — see `rules/perf-index-filtered-columns.md`.
+
+---
+
+## Count With withCount(), Never With a Loaded Collection
+
+`$order->items->count()` either fires a query per row or loads every child model to count them. `withCount()` adds a subquery aggregate to the original query and returns `items_count` as an integer.
+
+Aliased closures give conditional counts in the same pass, and `withExists()` answers a yes/no question without counting at all.
+
+**Incorrect (a collection loaded per order, to render a number):**
+
+```php
+$orders = Order::all();
+
+foreach ($orders as $order) {
+    echo $order->items->count();
+    echo $order->refunds->count();
+}
+```
+
+**Correct:**
+
+```php
+$orders = Order::query()
+    ->withCount([
+        'items',
+        'items as digital_items_count' => fn (Builder $q) => $q->where('is_digital', true),
+        'refunds',
+    ])
+    ->withExists('disputes')
+    ->get();
+
+foreach ($orders as $order) {
+    echo $order->items_count;
+    echo $order->digital_items_count;
+    echo $order->disputes_exists ? 'disputed' : 'clear';
+}
+```
+
+`withCount()` on a paginated list is charged per row on the page, not per row in the table — but the child table still needs the foreign-key index. When you need the count *and* the rows, `with()` plus `$order->items->count()` is correct: the collection is already in memory. See `rules/perf-exists-not-count.md` for the query-level version.
 
 ---
 
@@ -1133,7 +1312,222 @@ Raw SQL, `DB::table()` queries and reporting views bypass the soft-delete scope 
 
 ---
 
-# 6. Raw SQL and Query Expressions
+# 6. Migrations and Schema
+
+**Impact: MEDIUM-HIGH**
+
+A migration is the only description of the schema that every environment agrees on. It is immutable once deployed, it holds structure rather than data, and it declares the constraints and indexes the queries above depend on.
+
+---
+
+## Declare Foreign Keys With constrained() and a Delete Behaviour
+
+A plain `unsignedBigInteger('user_id')` is a number with a naming convention attached. Nothing stops a delete from leaving rows pointing at a user that no longer exists, and the bug surfaces months later as a null relation in a report.
+
+`foreignId()->constrained()` names the constraint, adds the index and enforces the reference. Always state what a parent delete does — the default is to refuse it, and silence about that is a decision nobody made on purpose.
+
+**Incorrect (an integer column that documents an intention):**
+
+```php
+Schema::create('invoices', function (Blueprint $table): void {
+    $table->id();
+    $table->unsignedBigInteger('customer_id');
+    $table->unsignedBigInteger('approved_by')->nullable();
+    $table->timestamps();
+});
+```
+
+**Correct:**
+
+```php
+Schema::create('invoices', function (Blueprint $table): void {
+    $table->id();
+    $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
+    $table->timestamps();
+});
+```
+
+`constrained('users')` covers the non-conventional column name. The behaviours are `cascadeOnDelete()`, `nullOnDelete()`, `restrictOnDelete()` and `noActionOnDelete()` — pick per relationship, not per project.
+
+Cascading deletes at the database level skip model events, so an observer that cleans up files or search indexes will not run. Where that matters, use `restrictOnDelete()` and delete through the domain.
+
+---
+
+## Mirror Column Defaults in the Model
+
+A database default only applies at `INSERT`. Until the row is written, `new Invoice()->status` is `null`, so validation, policies and any calculation that runs before the save see a value the database would never store. The bug appears as a `null` enum cast or a policy that lets an unsaved draft through.
+
+Declare the same default in `$attributes` on the model.
+
+**Incorrect (the default exists in one of the two places it is read from):**
+
+```php
+// Migration
+$table->string('status')->default('draft');
+$table->unsignedInteger('retry_count')->default(0);
+
+// Model — nothing
+$invoice = new Invoice(['number' => $number]);
+$invoice->status;        // null
+$invoice->retry_count;   // null
+```
+
+**Correct:**
+
+```php
+final class Invoice extends Model
+{
+    protected $attributes = [
+        'status' => InvoiceStatus::Draft->value,
+        'retry_count' => 0,
+    ];
+
+    protected function casts(): array
+    {
+        return ['status' => InvoiceStatus::class];
+    }
+}
+```
+
+`$attributes` holds raw database values, so use the enum's `->value` rather than the case — the cast converts it on read. Keep both sides in step: a migration that changes a default gets a matching model change in the same commit, or the two drift apart silently.
+
+---
+
+## Never Edit a Migration That Has Run in Production
+
+Once a migration is in the `migrations` table of any environment you do not control, it is history. Editing it changes what a fresh database gets and leaves every existing database untouched — production and a new developer's machine now have different schemas, and nothing reports it.
+
+Add a new migration instead. It is one file, and it is the only version that runs everywhere.
+
+**Incorrect (the column exists on new installs only):**
+
+```php
+// database/migrations/2026_01_11_000000_create_invoices_table.php — already deployed
+Schema::create('invoices', function (Blueprint $table): void {
+    $table->id();
+    $table->string('number');
+    $table->string('external_ref')->nullable();   // ← added weeks later
+    $table->timestamps();
+});
+```
+
+**Correct:**
+
+```php
+// database/migrations/2026_03_02_090000_add_external_ref_to_invoices_table.php
+public function up(): void
+{
+    Schema::table('invoices', function (Blueprint $table): void {
+        $table->string('external_ref')->nullable()->after('number');
+    });
+}
+
+public function down(): void
+{
+    Schema::table('invoices', function (Blueprint $table): void {
+        $table->dropColumn('external_ref');
+    });
+}
+```
+
+The exception is a migration that has only ever run on your own machine and is not yet merged. After merge, treat it as deployed. Squashing with `schema:dump` is the supported way to collapse old migrations — editing them is not.
+
+---
+
+## Write a down() That Actually Reverses up()
+
+`migrate:rollback` runs in two places that matter: a deploy that failed halfway, and a local branch switch. An empty `down()` turns both into manual schema surgery.
+
+Reverse exactly what `up()` did, in the opposite order. When a change genuinely cannot be reversed — a dropped column whose data is gone, a destructive backfill — say so in the method rather than leaving it blank, and ship the fix forward as a new migration.
+
+**Incorrect (generated stub left as-is):**
+
+```php
+public function up(): void
+{
+    Schema::table('invoices', function (Blueprint $table): void {
+        $table->string('external_ref')->nullable();
+        $table->index(['status', 'issued_at']);
+    });
+}
+
+public function down(): void
+{
+    //
+}
+```
+
+**Correct:**
+
+```php
+public function down(): void
+{
+    Schema::table('invoices', function (Blueprint $table): void {
+        $table->dropIndex(['status', 'issued_at']);
+        $table->dropColumn('external_ref');
+    });
+}
+```
+
+```php
+public function down(): void
+{
+    throw new RuntimeException(
+        'Irreversible: the pre-merge customer_name values were dropped. Roll forward instead.',
+    );
+}
+```
+
+Test it the cheap way: run `php artisan migrate` then `php artisan migrate:rollback` on a scratch database before opening the pull request.
+
+---
+
+## Keep Schema Changes and Data Changes in Separate Migrations
+
+A migration that creates a table and then fills it has two ways to fail and one row in the `migrations` table. If the insert throws, the DDL has already committed on MySQL — which does not roll back schema changes — so the migration is recorded as failed, cannot be re-run, and the table exists half-configured.
+
+Split them: one migration for structure, one for data. Better still, put the backfill in a queued job or a console command so it can be re-run, chunked and monitored.
+
+**Incorrect (one file, two responsibilities, no safe retry):**
+
+```php
+public function up(): void
+{
+    Schema::create('plans', function (Blueprint $table): void {
+        $table->id();
+        $table->string('code')->unique();
+        $table->unsignedInteger('price_cents');
+    });
+
+    DB::table('plans')->insert([
+        ['code' => 'free', 'price_cents' => 0],
+        ['code' => 'pro', 'price_cents' => 4900],
+    ]);
+}
+```
+
+**Correct:**
+
+```php
+// 2026_03_02_090000_create_plans_table.php — structure only
+Schema::create('plans', function (Blueprint $table): void { /* ... */ });
+
+// 2026_03_02_090100_seed_default_plans.php — data only, and idempotent
+public function up(): void
+{
+    DB::table('plans')->upsert([
+        ['code' => 'free', 'price_cents' => 0],
+        ['code' => 'pro', 'price_cents' => 4900],
+    ], uniqueBy: ['code'], update: ['price_cents']);
+}
+```
+
+A backfill over a large table belongs in a chunked command, not a migration — see `rules/perf-chunk-large-result-sets.md`.
+
+---
+
+# 7. Raw SQL and Query Expressions
 
 **Impact: MEDIUM**
 
@@ -1183,6 +1577,8 @@ final readonly class OrderStatsQuery
 ```
 
 `toBase()` skips model hydration — there is no model here, only numbers. Cache the result if the panel is hit on every page load.
+
+Add `toBase()` when the result is a row of scalars rather than models — it skips hydration entirely, which is the whole point of collapsing the counts into one query.
 
 ---
 
@@ -1371,7 +1767,7 @@ Available groups: value/wrap (`Value`, `Alias`), CASE (`CaseGroup`, `CaseRule`),
 
 ---
 
-# 7. Bulk Operations
+# 8. Bulk Operations
 
 **Impact: MEDIUM**
 
@@ -1451,6 +1847,8 @@ Order::query()
 ```
 
 Choose by cost: thousands of rows with a required per-row side effect is a queued job over chunks, not a single bulk statement.
+
+When you already hold the models, `$orders->toQuery()->update([...])` builds the `whereIn` from the collection's keys for you — same event-skipping caveat, less hand-written SQL.
 
 ---
 

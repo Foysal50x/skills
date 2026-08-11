@@ -33,6 +33,10 @@ OrderPlaced::dispatch($order->tenantId(), $order->id());
 DB::transaction(function () use ($data): void {
     $order = $this->orders->place($data);
 
+    // Per dispatch — chain it onto anything queueable:
+    GenerateInvoice::dispatch($order->id())->afterCommit();
+
+    // Or defer an arbitrary callback:
     DB::afterCommit(fn () => OrderPlaced::dispatch($order->tenantId(), $order->id()));
 });
 ```
@@ -47,6 +51,6 @@ DB::transaction(function () use ($data): void {
 ],
 ```
 
-`after_commit` covers queued listeners, queued jobs and queued notifications. It does not defer synchronous listeners — one more reason side-effecting listeners are queued.
+`after_commit` covers queued jobs, queued event listeners, mailables, notifications and broadcast events, and a rollback discards everything dispatched inside the transaction. It does not defer synchronous listeners — one more reason side-effecting listeners are queued. With it on globally, a dispatch that genuinely must not wait opts out with `->beforeCommit()`.
 
-Per-event rather than per-connection, an event class may implement `ShouldDispatchAfterCommit` — the same guarantee, declared where the event is defined. Notifications and mailables use `afterCommit()`; see `rules/event-queue-notifications-and-mailables.md`.
+Per-event rather than per-connection, an event class may implement `Illuminate\Contracts\Events\ShouldDispatchAfterCommit` — the same guarantee, declared where the event is defined. Notifications and mailables use `afterCommit()`; see `rules/event-queue-notifications-and-mailables.md`.

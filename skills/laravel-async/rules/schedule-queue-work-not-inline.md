@@ -32,14 +32,15 @@ Schedule::job(new DispatchMonthlyStatements())->monthlyOn(1, '02:00');
 ```php
 final class DispatchMonthlyStatements implements ShouldQueue
 {
-    public function handle(): void
+    public function handle(MerchantRepositoryInterface $merchants): void
     {
-        Merchant::query()
-            ->where('statements_enabled', true)
-            ->lazyById(500)
-            ->each(fn (Merchant $m) => GenerateMonthlyStatement::dispatch($m->id)->onQueue('low'));
+        // The repository streams ids; the batching rule lives with the query.
+        $merchants->streamStatementRecipients()
+            ->each(fn (int $id) => GenerateMonthlyStatement::dispatch($id)->onQueue('low'));
     }
 }
 ```
+
+The job dispatches; it does not build the query. The `where` and the `lazyById(500)` belong in a Query Class behind the repository — see the `laravel-patterns` skill's `query-owns-all-query-construction` rule.
 
 `Schedule::command()` is fine for genuinely short tasks — a cleanup, a health ping. The dividing line is whether losing the run mid-way matters.

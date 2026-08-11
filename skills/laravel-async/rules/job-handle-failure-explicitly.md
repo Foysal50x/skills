@@ -33,10 +33,8 @@ final class GenerateOrderExport implements ShouldQueue
 
     public function failed(?Throwable $e): void
     {
-        Export::whereKey($this->exportId)->update([
-            'status' => ExportStatus::Failed,
-            'failed_at' => now(),
-        ]);
+        // A per-row write, so the export's observers still fire.
+        Export::find($this->exportId)?->markFailed(now());
 
         report($e);
 

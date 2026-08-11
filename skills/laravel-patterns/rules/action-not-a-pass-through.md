@@ -40,16 +40,20 @@ final class ListTodosController
 
 final readonly class CompleteTodoAction
 {
+    public function __construct(private TodoRepositoryInterface $todos) {}
+
     public function handle(Todo $todo, CarbonImmutable $completedAt): Todo
     {
-        return DB::transaction(function () use ($todo, $completedAt): Todo {
+        $todo = DB::transaction(function () use ($todo, $completedAt): Todo {
             $todo = $this->todos->markCompleted($todo, $completedAt);
             $this->todos->completeSubtasksOf($todo, $completedAt);
 
-            TodoCompleted::dispatch($todo->getKey(), $completedAt);
-
             return $todo;
         });
+
+        TodoCompleted::dispatch($todo->getKey(), $completedAt);   // after the commit
+
+        return $todo;
     }
 }
 ```

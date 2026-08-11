@@ -7,9 +7,9 @@ tags: scopes, attributes, model, laravel-12
 
 ## Declare Query Scopes With the Scope Attribute
 
-Laravel 12 added `#[Scope]`, which removes the `scope` name prefix and makes the intent explicit. Static analysis and IDEs resolve it; the old prefix convention they had to special-case.
+Laravel 12.4 added `#[Scope]`, which removes the `scope` name prefix and makes the intent explicit. Static analysis and IDEs resolve it; the old prefix convention they had to special-case.
 
-Available on Laravel 12 and 13. On Laravel 11 use the `scope` prefix.
+Laravel 12.4+ and 13. `Illuminate\Database\Eloquent\Attributes\Scope` does not exist on 12.0–12.3, so on those and on 11 use the `scope` prefix.
 
 **Incorrect (prefix convention, and a redundant one at that):**
 

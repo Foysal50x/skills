@@ -23,14 +23,15 @@ return Order::query()
 **Correct:**
 
 ```php
-public function scopeOrderByLastPaidAt(Builder $query, string $direction = 'desc'): void
+#[Scope]   // Laravel 12.4+; use the scope prefix below that
+protected function orderByLastPaidAt(Builder $query, Direction $direction = Direction::Desc): void
 {
     $query->orderBy(
         Payment::select('created_at')
             ->whereColumn('order_id', 'orders.id')
             ->latest()
             ->take(1),
-        $direction,
+        $direction->value,
     );
 }
 

@@ -45,8 +45,9 @@ return Order::query()
 ```
 
 ```php
-'customer' => $this->customer->name,
-'items' => $this->items_count,
+// The Resource still guards, so it can never lazy-load on its own:
+'customer' => new CustomerResource($this->whenLoaded('customer')),
+'items' => $this->whenCounted('items'),
 ```
 
 Nested and conditional loads work the same way: `with(['items.product', 'shipment' => fn ($q) => $q->latest()])`.

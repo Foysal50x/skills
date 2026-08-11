@@ -32,7 +32,7 @@ final class SendOrderConfirmation implements ShouldQueue
 
     public function handle(OrderRepositoryInterface $orders): void
     {
-        $order = Order::with('customer', 'items')->find($this->orderId);
+        $order = $orders->withDetail($this->orderId);   // the repository owns the eager loads
 
         if ($order === null) {
             return;   // deleted between dispatch and handling — not an error

@@ -39,15 +39,18 @@ final readonly class PlaceOrderAction
 
     public function handle(CreateOrderData $data): Order
     {
-        return DB::transaction(function () use ($data): Order {
-            $order = $this->orders->place($data, $this->pricing->totalFor($data));
+        $order = DB::transaction(fn (): Order => $this->orders->place(
+            $data,
+            $this->pricing->totalFor($data),
+        ));
 
-            OrderPlaced::dispatch($order->tenantId(), $order->id());
+        OrderPlaced::dispatch($order->tenantId(), $order->id());   // after the commit
 
-            return $order;
-        });
+        return $order;
     }
 }
 ```
+
+The transaction covers the write and nothing else: an event dispatched inside it can reach a queued listener before the commit. See the `laravel-async` skill's `event-dispatch-after-commit` rule.
 
 The controller maps `Request` to `CreateOrderData` and the result to a Resource. See `rules/action-maps-request-to-value-objects.md`.

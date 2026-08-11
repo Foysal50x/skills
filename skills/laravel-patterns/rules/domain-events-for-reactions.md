@@ -43,7 +43,7 @@ final readonly class OrderPlaced
 }
 
 // Domain/Orders/Actions/PlaceOrderAction.php
-DB::transaction(fn () => $order = $this->orders->place($data));
+$order = DB::transaction(fn (): Order => $this->orders->place($data));
 OrderPlaced::dispatch($order->tenantId(), $order->id());
 
 // Domain/Billing/Listeners/RecordOrderUsage.php   — queued, Billing's data only

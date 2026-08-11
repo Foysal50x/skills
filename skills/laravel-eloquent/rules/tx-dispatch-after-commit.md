@@ -43,4 +43,4 @@ DB::transaction(function () use ($data): void {
 });
 ```
 
-Queued event listeners and queued notifications respect the same setting.
+The connection setting reaches queued event listeners, mailables, notifications and broadcast events as well as jobs, and a rollback discards every one of them. Where `after_commit` is on globally and a particular dispatch must not wait, `->beforeCommit()` opts that one out.

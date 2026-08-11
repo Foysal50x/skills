@@ -4,7 +4,7 @@ description: Asynchronous and caching rules for Laravel — idempotent queued jo
 license: MIT
 metadata:
   author: Foysal Ahmed
-  version: "1.0.0"
+  version: "1.1.0"
   laravel: "^12.0 || ^13.0"
   php: "^8.3"
 ---

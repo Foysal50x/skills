@@ -4,7 +4,7 @@ description: REST API and HTTP-edge rules for Laravel — authorization before t
 license: MIT
 metadata:
   author: Foysal Ahmed
-  version: "1.0.0"
+  version: "1.1.0"
   laravel: "^12.0 || ^13.0"
   php: "^8.3"
 ---

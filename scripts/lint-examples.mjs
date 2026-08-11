@@ -99,7 +99,9 @@ function transactionRanges(lines) {
 const EDGE_CLASS = /\bclass\s+\w*(Controller|Job|Listener|Command)\b|implements\s+[^{]*Should(Queue|BeUnique)/
 const QUERY_CONSTRUCTION =
   /(?:->|::)(?:where[A-Za-z]*|orderBy[A-Za-z]*|latest|oldest|with|withCount|load|lazyById|chunkById|paginate|simplePaginate|cursorPaginate|join|selectRaw|whereRaw)\(|\b\w+::query\(\)/
-// `DB::afterCommit` and `->afterCommit()` are the sanctioned ways to defer, so they are not findings.
+// A line that states its commit behaviour — `DB::afterCommit`, `->afterCommit()`, `->beforeCommit()`
+// — has made the decision on purpose. The check is for the dispatches that never made one.
+const COMMIT_INTENT = /afterCommit|beforeCommit/
 const SIDE_EFFECT = /::dispatch\(|->dispatch\(|->notify\(|\bMail::(to|send|queue)\(|\bNotification::(send|route)\(|\bHttp::/
 const DRIVER_SQL = /\bdate_format\s*\(|\bstrftime\s*\(|\bto_char\s*\(/
 const CRUD_METHOD = /^\s*public function (find|all|get[A-Z]\w*|firstWhere|updateById|deleteById)\s*\(/
@@ -115,8 +117,8 @@ const CHECKS = [
         for (let i = from; i <= to; i += 1) {
           const line = block.lines[i]
           if (!SIDE_EFFECT.test(line)) continue
-          if (/afterCommit/.test(line)) continue
-          found.push({ line: i, message: 'side effect dispatched inside DB::transaction() — dispatch after commit, or wrap in DB::afterCommit()' })
+          if (COMMIT_INTENT.test(line)) continue
+          found.push({ line: i, message: 'side effect dispatched inside DB::transaction() — dispatch after commit, chain ->afterCommit(), or wrap in DB::afterCommit()' })
         }
       }
       return found

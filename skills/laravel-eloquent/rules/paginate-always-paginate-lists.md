@@ -34,7 +34,7 @@ public function ordersForMerchant(int $merchantId, int $perPage = 25): LengthAwa
 ```
 
 ```php
-$perPage = min($request->integer('per_page', 25), 100);
+$perPage = max(1, min($request->integer('per_page', 25), 100));   // per_page=0 paginates by zero
 ```
 
 The rule is about what reaches a client. A repository read the query itself bounds — a dashboard's pending queue, a picker's twenty most recent — may still return a `Collection`; what a list endpoint renders is always paginated.

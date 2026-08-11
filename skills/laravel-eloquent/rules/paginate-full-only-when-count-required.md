@@ -42,10 +42,13 @@ public function countMatching(OrderQueryFilter $filter): int
 
 private function countKey(OrderQueryFilter $filter): string
 {
+    // Every field that changes which rows match — sorting does not.
     $fingerprint = [
         'merchant' => $filter->merchantId,
         'status' => $filter->status?->value,
         'from' => $filter->dateRange?->from?->toDateString(),
+        'to' => $filter->dateRange?->to?->toDateString(),
+        'search' => $filter->search,
     ];
 
     ksort($fingerprint);

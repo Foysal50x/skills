@@ -140,7 +140,9 @@ npm run lint       # holds every Correct example to the rest of the rule set
 npm run check      # all three
 ```
 
-`npm run lint` is what stops a rule teaching one thing while its own example does another: it reads each `**Correct:**` block as code and checks it against the other rules — events dispatched inside a transaction, `scope`-prefixed methods, `serialize()` in a cache key, query construction in a Controller or Job, driver-specific SQL, CRUD-shaped repository methods — and runs `php -l` over the worked examples.
+`npm run lint` is what stops a rule teaching one thing while its own example does another. It reads every fenced block as code and checks it against the other rules — events dispatched inside a transaction, `scope`-prefixed methods, `serialize()` in a cache key, query construction in a Controller or Job, driver-specific SQL, CRUD-shaped repository methods — then holds the worked examples to one PHP type per file and runs `php -l` over them.
+
+A block counts as an example to check unless the nearest preceding marker is `**Incorrect`; `**Correct:**`, `**Also correct**`, `**Or**` and an unlabelled trailing snippet all qualify, because an unlabelled snippet teaches just as loudly as a labelled one.
 
 CI runs all three on every push and fails if `AGENTS.md` is stale.
 

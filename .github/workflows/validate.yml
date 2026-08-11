@@ -18,6 +18,9 @@ jobs:
       - name: Validate skills
         run: node scripts/validate.mjs
 
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
       - name: Lint examples across rules
         run: node scripts/lint-examples.mjs
       - name: Fail if AGENTS.md is stale

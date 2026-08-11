@@ -40,6 +40,8 @@ final class ListTodosController
 
 final readonly class CompleteTodoAction
 {
+    public function __construct(private TodoRepositoryInterface $todos) {}
+
     public function handle(Todo $todo, CarbonImmutable $completedAt): Todo
     {
         $todo = DB::transaction(function () use ($todo, $completedAt): Todo {

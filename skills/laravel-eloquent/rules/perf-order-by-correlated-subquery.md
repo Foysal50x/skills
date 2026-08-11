@@ -23,7 +23,7 @@ return Order::query()
 **Correct:**
 
 ```php
-#[Scope]
+#[Scope]   // Laravel 12.4+; use the scope prefix below that
 protected function orderByLastPaidAt(Builder $query, Direction $direction = Direction::Desc): void
 {
     $query->orderBy(

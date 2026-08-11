@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-export const SKILLS_DIR = new URL('../skills/', import.meta.url).pathname
+// fileURLToPath, not `.pathname`: the latter keeps percent-encoding and yields "/C:/…" on Windows.
+export const SKILLS_DIR = fileURLToPath(new URL('../skills/', import.meta.url))
 
 /** All skill directory names, sorted. */
 export function listSkills() {

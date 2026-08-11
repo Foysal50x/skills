@@ -9,7 +9,7 @@ tags: value-object, dto, filter, query-class
 
 When a query's inputs grow, bundle them into a domain-specific filter DTO so `handle()` takes a single argument. The DTO lives in `app/Domain/<Context>/Filters/`, composed from shared Value Objects.
 
-The Controller maps `Request` to the DTO. HTTP stays at the edge.
+The Form Request maps `Request` to the DTO, next to the rules that validated it. HTTP stays at the edge.
 
 **Incorrect (parameters added one at a time, every caller edited each time):**
 

@@ -23,7 +23,7 @@ app/
 ## The boundaries this example demonstrates
 
 - `DateRange` and `Sorting` hold data and pure predicates. Neither imports `Builder`, and `Sorting` parses its own wire format in a named constructor.
-- `SearchOrdersQuery` is the only file that writes `where()` and `orderBy()`, and it whitelists sortable columns.
+- `SearchOrdersQuery` owns the search rules and the sortable-column allow-list. `EloquentOrderRepository` may inline a simple bounded `where()` — the boundary is that query construction stops at the repository layer, and neither ever hands a `Builder` outwards.
 - `OrderRepositoryInterface` returns `LengthAwarePaginator`, `Collection` and `int` — never `Builder`. `pendingOrders()` returns a `Collection` because the query bounds it; anything a client pages through returns a paginator.
 - The Form Requests authorize, validate and build the Value Objects. `OrderIndexController` receives the filter already made; nothing inward sees HTTP.
 - `PlaceOrderAction` orchestrates one use case and announces `OrderPlaced` **after** the transaction commits, so no queued listener can outrun the write.

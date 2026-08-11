@@ -28,7 +28,7 @@ final class SearchOrdersRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'merchant_id' => ['nullable', 'integer'],
+            'merchant_id' => ['nullable', 'integer', 'min:1'],
             'status' => ['nullable', Rule::enum(OrderStatus::class)],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
@@ -39,7 +39,14 @@ final class SearchOrdersRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge(['search' => trim((string) $this->input('search')) ?: null]);
+        $search = $this->input('search');
+
+        // Normalize only what is already a string; anything else passes through
+        // unchanged so `rules()` returns a validation error rather than this
+        // method casting an array and corrupting the input.
+        if (is_string($search)) {
+            $this->merge(['search' => trim($search) ?: null]);
+        }
     }
 
     public function toFilter(): OrderQueryFilter

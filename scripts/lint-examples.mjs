@@ -5,10 +5,22 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { SKILLS_DIR, listSkills, splitFrontmatter } from './lib.mjs'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+
+/** `php -l` is a real check, so say so out loud when the runtime is missing rather than skipping in silence. */
+function phpAvailable() {
+  try {
+    execFileSync('php', ['--version'], { stdio: 'pipe' })
+    return true
+  } catch {
+    process.stderr.write('warn  php not found — skipping the php -l syntax check over examples/\n')
+    return false
+  }
+}
 
 /** Every markdown file whose code blocks teach: rules, references and the skill index. */
 function teachingDocs(skill) {
@@ -56,11 +68,14 @@ function codeBlocks(body) {
     if (open === null) {
       if (/^\s*\*\*Incorrect/.test(line)) stance = 'incorrect'
       else if (/^\s*\*\*(Correct|Also correct|Or)/.test(line)) stance = 'correct'
-      const fence = line.match(/^```(\w*)/)
-      if (fence) open = { lang: fence[1], stance, start: index + 2, lines: [] }
+      const fence = line.match(/^\s*(`{3,})(\w*)/)
+      if (fence) open = { fence: fence[1].length, lang: fence[2], stance, start: index + 2, lines: [] }
       return
     }
-    if (/^```\s*$/.test(line)) {
+    // Only a fence at least as long as the opener closes the block, so a nested
+    // ``` inside a ```` example does not truncate it and hide the rest.
+    const closing = line.match(/^\s*(`{3,})\s*$/)
+    if (closing && closing[1].length >= open.fence) {
       blocks.push(open)
       open = null
       return
@@ -198,6 +213,7 @@ const CHECKS = [
 ]
 
 const findings = []
+const hasPhp = phpAvailable()
 const report = (file, line, id, message) => findings.push({ file: relative(ROOT, file), line, id, message })
 
 for (const skill of listSkills()) {
@@ -232,11 +248,12 @@ for (const skill of listSkills()) {
       report(file, 1, 'psr4-one-type-per-file', `declares ${declarations.map((d) => d[2]).join(', ')} — PSR-4 resolves one type per file`)
     }
 
+    if (!hasPhp) continue // structure checks above still ran
+
     try {
       execFileSync('php', ['-l', file], { stdio: 'pipe' })
     } catch (error) {
       const output = String(error.stdout ?? error.stderr ?? error.message).trim().split('\n')[0]
-      if (error.code === 'ENOENT') break // no PHP on this machine; structure checks above still ran
       report(file, 1, 'php-syntax', output)
     }
   }

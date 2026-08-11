@@ -231,7 +231,7 @@ return Order::query()
 **Correct:**
 
 ```php
-#[Scope]
+#[Scope]   // Laravel 12.4+; use the scope prefix below that
 protected function orderByLastPaidAt(Builder $query, Direction $direction = Direction::Desc): void
 {
     $query->orderBy(
@@ -374,7 +374,7 @@ foreach ($orders as $order) {
 
 ```php
 // On the model
-#[Scope]
+#[Scope]   // Laravel 12.4+; use the scope prefix below that
 protected function withLastPaidAt(Builder $query): void
 {
     $query->addSelect([
@@ -490,7 +490,7 @@ public function ordersForMerchant(int $merchantId, int $perPage = 25): LengthAwa
 ```
 
 ```php
-$perPage = min($request->integer('per_page', 25), 100);
+$perPage = max(1, min($request->integer('per_page', 25), 100));   // per_page=0 paginates by zero
 ```
 
 The rule is about what reaches a client. A repository read the query itself bounds — a dashboard's pending queue, a picker's twenty most recent — may still return a `Collection`; what a list endpoint renders is always paginated.
@@ -567,10 +567,13 @@ public function countMatching(OrderQueryFilter $filter): int
 
 private function countKey(OrderQueryFilter $filter): string
 {
+    // Every field that changes which rows match — sorting does not.
     $fingerprint = [
         'merchant' => $filter->merchantId,
         'status' => $filter->status?->value,
         'from' => $filter->dateRange?->from?->toDateString(),
+        'to' => $filter->dateRange?->to?->toDateString(),
+        'search' => $filter->search,
     ];
 
     ksort($fingerprint);
@@ -1054,9 +1057,9 @@ Two cautions that do not change with the attribute:
 
 ## Declare Query Scopes With the Scope Attribute
 
-Laravel 12 added `#[Scope]`, which removes the `scope` name prefix and makes the intent explicit. Static analysis and IDEs resolve it; the old prefix convention they had to special-case.
+Laravel 12.4 added `#[Scope]`, which removes the `scope` name prefix and makes the intent explicit. Static analysis and IDEs resolve it; the old prefix convention they had to special-case.
 
-Available on Laravel 12 and 13. On Laravel 11 use the `scope` prefix.
+Laravel 12.4+ and 13. `Illuminate\Database\Eloquent\Attributes\Scope` does not exist on 12.0–12.3, so on those and on 11 use the `scope` prefix.
 
 **Incorrect (prefix convention, and a redundant one at that):**
 

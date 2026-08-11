@@ -25,7 +25,7 @@ foreach ($orders as $order) {
 
 ```php
 // On the model
-#[Scope]
+#[Scope]   // Laravel 12.4+; use the scope prefix below that
 protected function withLastPaidAt(Builder $query): void
 {
     $query->addSelect([

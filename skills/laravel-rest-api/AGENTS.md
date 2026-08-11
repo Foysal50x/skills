@@ -621,12 +621,14 @@ Route::get('/orders/{order}', OrderShowController::class);
 
 final class OrderShowController
 {
-    public function __invoke(Order $order): OrderResource
+    public function __invoke(Order $order, OrderRepositoryInterface $orders): OrderResource
     {
-        return new OrderResource($order->load('customer', 'items'));
+        return new OrderResource($orders->withDetail($order));
     }
 }
 ```
+
+The controller does not call `load()` itself: eager loading is query construction, so the Repository owns which relations the Resource can read. See `rules/controller-no-query-construction.md` and `rules/resource-when-loaded-for-relations.md`.
 
 ```php
 // Bind by slug instead of id:

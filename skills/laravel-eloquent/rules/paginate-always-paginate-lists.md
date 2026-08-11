@@ -14,9 +14,10 @@ Cap `per_page` server-side even when the client supplies it.
 **Incorrect:**
 
 ```php
-public function pendingOrders(): Collection
+// Feeds GET /api/orders — every matching row, on every request.
+public function ordersForMerchant(int $merchantId): Collection
 {
-    return Order::where('status', OrderStatus::Pending)->get();
+    return Order::where('merchant_id', $merchantId)->get();
 }
 
 // and, with a client-controlled limit:
@@ -26,14 +27,16 @@ public function pendingOrders(): Collection
 **Correct:**
 
 ```php
-public function pendingOrders(int $perPage = 25): LengthAwarePaginator
+public function ordersForMerchant(int $merchantId, int $perPage = 25): LengthAwarePaginator
 {
-    return $this->pendingOrders->handle()->paginate($perPage);
+    return $this->merchantOrders->handle($merchantId)->paginate($perPage);
 }
 ```
 
 ```php
 $perPage = min($request->integer('per_page', 25), 100);
 ```
+
+The rule is about what reaches a client. A repository read the query itself bounds — a dashboard's pending queue, a picker's twenty most recent — may still return a `Collection`; what a list endpoint renders is always paginated.
 
 An internal method that genuinely must return everything should stream instead — see `rules/perf-chunk-large-result-sets.md`.

@@ -25,7 +25,8 @@ foreach ($orders as $order) {
 
 ```php
 // On the model
-public function scopeWithLastPaidAt(Builder $query): void
+#[Scope]
+protected function withLastPaidAt(Builder $query): void
 {
     $query->addSelect([
         'last_paid_at' => Payment::select('created_at')
@@ -47,7 +48,8 @@ public function lastPayment(): BelongsTo
     return $this->belongsTo(Payment::class, 'last_payment_id');
 }
 
-public function scopeWithLastPayment(Builder $query): void
+#[Scope]
+protected function withLastPayment(Builder $query): void
 {
     $query->addSelect([
         'last_payment_id' => Payment::select('id')

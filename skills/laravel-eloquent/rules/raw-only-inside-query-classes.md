@@ -37,11 +37,13 @@ final readonly class MonthlyRevenueQuery
 {
     public function handle(int $merchantId, DateRange $period): Collection
     {
+        $month = new DateFmt('created_at', 'Y-m');   // driver-aware expression
+
         return Order::query()
-            ->selectRaw('date_format(created_at, ?) as month, sum(total) as revenue', ['%Y-%m'])
+            ->select([new Alias($month, 'month'), new Alias(new Sum('total'), 'revenue')])
             ->where('merchant_id', $merchantId)
             ->when($period->from !== null, fn (Builder $q) => $q->where('created_at', '>=', $period->from))
-            ->groupBy('month')
+            ->groupBy($month)
             ->orderBy('month')
             ->get();
     }
@@ -52,4 +54,4 @@ final readonly class MonthlyRevenueQuery
 $rows = $reports->monthlyRevenue($merchantId, (new LastNMonths(12))->range());
 ```
 
-Cross-database date formatting has a better home than `selectRaw` — see `rules/raw-custom-expression-helpers.md`.
+The date formatting goes through an Expression rather than `selectRaw`, so the same query compiles on the SQLite test suite and the MySQL production database — see `rules/raw-custom-expression-helpers.md` and `rules/raw-tpetry-instead-of-db-raw.md`.

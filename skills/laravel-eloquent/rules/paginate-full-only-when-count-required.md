@@ -34,9 +34,24 @@ interface OrderRepositoryInterface
 public function countMatching(OrderQueryFilter $filter): int
 {
     return Cache::remember(
-        'orders:count:'.md5(serialize($filter)),
+        $this->countKey($filter),
         now()->addMinute(),
-        fn () => $this->searchOrders->handle($filter)->count(),
+        fn (): int => $this->searchOrders->handle($filter)->count(),
     );
 }
+
+private function countKey(OrderQueryFilter $filter): string
+{
+    $fingerprint = [
+        'merchant' => $filter->merchantId,
+        'status' => $filter->status?->value,
+        'from' => $filter->dateRange?->from?->toDateString(),
+    ];
+
+    ksort($fingerprint);
+
+    return 'orders:count:v1:'.md5(json_encode($fingerprint, JSON_THROW_ON_ERROR));
+}
 ```
+
+Build the key from an ordered fingerprint, never from `serialize($filter)` — that key changes with the order the DTO's properties happened to be set, so it never hits. See the `laravel-async` skill's `cache-stable-key-convention` rule.

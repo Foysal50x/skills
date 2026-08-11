@@ -130,8 +130,9 @@ return Order::query()
 ```
 
 ```php
-'customer' => $this->customer->name,
-'items' => $this->items_count,
+// The Resource still guards, so it can never lazy-load on its own:
+'customer' => new CustomerResource($this->whenLoaded('customer')),
+'items' => $this->whenCounted('items'),
 ```
 
 Nested and conditional loads work the same way: `with(['items.product', 'shipment' => fn ($q) => $q->latest()])`.
@@ -230,14 +231,15 @@ return Order::query()
 **Correct:**
 
 ```php
-public function scopeOrderByLastPaidAt(Builder $query, string $direction = 'desc'): void
+#[Scope]
+protected function orderByLastPaidAt(Builder $query, Direction $direction = Direction::Desc): void
 {
     $query->orderBy(
         Payment::select('created_at')
             ->whereColumn('order_id', 'orders.id')
             ->latest()
             ->take(1),
-        $direction,
+        $direction->value,
     );
 }
 
@@ -372,7 +374,8 @@ foreach ($orders as $order) {
 
 ```php
 // On the model
-public function scopeWithLastPaidAt(Builder $query): void
+#[Scope]
+protected function withLastPaidAt(Builder $query): void
 {
     $query->addSelect([
         'last_paid_at' => Payment::select('created_at')
@@ -394,7 +397,8 @@ public function lastPayment(): BelongsTo
     return $this->belongsTo(Payment::class, 'last_payment_id');
 }
 
-public function scopeWithLastPayment(Builder $query): void
+#[Scope]
+protected function withLastPayment(Builder $query): void
 {
     $query->addSelect([
         'last_payment_id' => Payment::select('id')
@@ -466,9 +470,10 @@ Cap `per_page` server-side even when the client supplies it.
 **Incorrect:**
 
 ```php
-public function pendingOrders(): Collection
+// Feeds GET /api/orders — every matching row, on every request.
+public function ordersForMerchant(int $merchantId): Collection
 {
-    return Order::where('status', OrderStatus::Pending)->get();
+    return Order::where('merchant_id', $merchantId)->get();
 }
 
 // and, with a client-controlled limit:
@@ -478,15 +483,17 @@ public function pendingOrders(): Collection
 **Correct:**
 
 ```php
-public function pendingOrders(int $perPage = 25): LengthAwarePaginator
+public function ordersForMerchant(int $merchantId, int $perPage = 25): LengthAwarePaginator
 {
-    return $this->pendingOrders->handle()->paginate($perPage);
+    return $this->merchantOrders->handle($merchantId)->paginate($perPage);
 }
 ```
 
 ```php
 $perPage = min($request->integer('per_page', 25), 100);
 ```
+
+The rule is about what reaches a client. A repository read the query itself bounds — a dashboard's pending queue, a picker's twenty most recent — may still return a `Collection`; what a list endpoint renders is always paginated.
 
 An internal method that genuinely must return everything should stream instead — see `rules/perf-chunk-large-result-sets.md`.
 
@@ -552,12 +559,27 @@ interface OrderRepositoryInterface
 public function countMatching(OrderQueryFilter $filter): int
 {
     return Cache::remember(
-        'orders:count:'.md5(serialize($filter)),
+        $this->countKey($filter),
         now()->addMinute(),
-        fn () => $this->searchOrders->handle($filter)->count(),
+        fn (): int => $this->searchOrders->handle($filter)->count(),
     );
 }
+
+private function countKey(OrderQueryFilter $filter): string
+{
+    $fingerprint = [
+        'merchant' => $filter->merchantId,
+        'status' => $filter->status?->value,
+        'from' => $filter->dateRange?->from?->toDateString(),
+    ];
+
+    ksort($fingerprint);
+
+    return 'orders:count:v1:'.md5(json_encode($fingerprint, JSON_THROW_ON_ERROR));
+}
 ```
+
+Build the key from an ordered fingerprint, never from `serialize($filter)` — that key changes with the order the DTO's properties happened to be set, so it never hits. See the `laravel-async` skill's `cache-stable-key-convention` rule.
 
 ---
 
@@ -1711,11 +1733,13 @@ final readonly class MonthlyRevenueQuery
 {
     public function handle(int $merchantId, DateRange $period): Collection
     {
+        $month = new DateFmt('created_at', 'Y-m');   // driver-aware expression
+
         return Order::query()
-            ->selectRaw('date_format(created_at, ?) as month, sum(total) as revenue', ['%Y-%m'])
+            ->select([new Alias($month, 'month'), new Alias(new Sum('total'), 'revenue')])
             ->where('merchant_id', $merchantId)
             ->when($period->from !== null, fn (Builder $q) => $q->where('created_at', '>=', $period->from))
-            ->groupBy('month')
+            ->groupBy($month)
             ->orderBy('month')
             ->get();
     }
@@ -1726,7 +1750,7 @@ final readonly class MonthlyRevenueQuery
 $rows = $reports->monthlyRevenue($merchantId, (new LastNMonths(12))->range());
 ```
 
-Cross-database date formatting has a better home than `selectRaw` — see `rules/raw-custom-expression-helpers.md`.
+The date formatting goes through an Expression rather than `selectRaw`, so the same query compiles on the SQLite test suite and the MySQL production database — see `rules/raw-custom-expression-helpers.md` and `rules/raw-tpetry-instead-of-db-raw.md`.
 
 ---
 

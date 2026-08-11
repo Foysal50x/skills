@@ -35,7 +35,7 @@ final class SyncIntegrationJob implements ShouldQueue
 
     public function handle(IntegrationRepositoryInterface $integrations, GatewayClientFactory $clients): void
     {
-        $integration = $integrations->find($this->integrationId);
+        $integration = $integrations->activeIntegration($this->integrationId);
 
         if ($integration === null) {
             return;

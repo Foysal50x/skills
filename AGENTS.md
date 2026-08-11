@@ -19,6 +19,7 @@ scripts/
   lib.mjs               shared parsing helpers
   build-agents.mjs      rules/*.md + _sections.md → AGENTS.md
   validate.mjs          structural validation
+  lint-examples.mjs     cross-rule validation of every Correct example
 skills/{skill-name}/         laravel-async · laravel-eloquent · laravel-patterns · laravel-rest-api · laravel-testing
   SKILL.md              index (max 500 lines)
   AGENTS.md             generated — never edit by hand
@@ -36,10 +37,17 @@ skills/{skill-name}/         laravel-async · laravel-eloquent · laravel-patter
 ```bash
 npm run build      # regenerate every skills/*/AGENTS.md
 npm run validate   # structural checks; exits non-zero on error
-npm run check      # both
+npm run lint       # cross-rule checks on the code in every Correct example
+npm run check      # all three
 ```
 
 Always run `npm run check` before committing. CI fails if `AGENTS.md` is stale.
+
+### Examples must obey the other rules
+
+`validate.mjs` checks a rule's *structure*. `lint-examples.mjs` checks its *content*: it walks every fenced block in `SKILL.md`, `rules/` and `references/` plus every `examples/**/*.php`, classifies each block as correct or incorrect by the nearest `**Correct` / `**Incorrect` marker, and holds the correct ones to the rest of the rule set — no side effect dispatched inside `DB::transaction()`, no `scope`-prefixed methods, no `serialize()` in a cache key, no query construction inside a Controller, Job, Listener or Command, no driver-specific SQL outside an Expression class, no CRUD-shaped repository methods, one PHP type per example file, and `php -l` over the worked examples.
+
+A rule that teaches one thing while its example does another is worse than no rule. When a check fires, fix the example — reach for an `allow` entry on the check only when a rule's whole subject *is* the pattern.
 
 ## Conventions
 

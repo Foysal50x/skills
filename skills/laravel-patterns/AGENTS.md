@@ -545,14 +545,16 @@ final readonly class CompleteTodoAction
 {
     public function handle(Todo $todo, CarbonImmutable $completedAt): Todo
     {
-        return DB::transaction(function () use ($todo, $completedAt): Todo {
+        $todo = DB::transaction(function () use ($todo, $completedAt): Todo {
             $todo = $this->todos->markCompleted($todo, $completedAt);
             $this->todos->completeSubtasksOf($todo, $completedAt);
 
-            TodoCompleted::dispatch($todo->getKey(), $completedAt);
-
             return $todo;
         });
+
+        TodoCompleted::dispatch($todo->getKey(), $completedAt);   // after the commit
+
+        return $todo;
     }
 }
 ```
@@ -595,16 +597,19 @@ final readonly class PlaceOrderAction
 
     public function handle(CreateOrderData $data): Order
     {
-        return DB::transaction(function () use ($data): Order {
-            $order = $this->orders->place($data, $this->pricing->totalFor($data));
+        $order = DB::transaction(fn (): Order => $this->orders->place(
+            $data,
+            $this->pricing->totalFor($data),
+        ));
 
-            OrderPlaced::dispatch($order->tenantId(), $order->id());
+        OrderPlaced::dispatch($order->tenantId(), $order->id());   // after the commit
 
-            return $order;
-        });
+        return $order;
     }
 }
 ```
+
+The transaction covers the write and nothing else: an event dispatched inside it can reach a queued listener before the commit. See the `laravel-async` skill's `event-dispatch-after-commit` rule.
 
 The controller maps `Request` to `CreateOrderData` and the result to a Resource. See `rules/action-maps-request-to-value-objects.md`.
 
@@ -933,12 +938,15 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
         return $this->searchOrders->handle($filter)->paginate($perPage);
     }
 
-    // Inlined: one condition, no rules worth naming.
+    // Inlined: one condition, no rules worth naming. Bounded, and it feeds the
+    // ops queue rather than a list endpoint — anything a client pages through
+    // returns a paginator instead.
     public function pendingOrders(?int $merchantId = null): Collection
     {
         return Order::query()
             ->where('status', OrderStatus::Pending)
             ->when($merchantId !== null, fn (Builder $q) => $q->where('merchant_id', $merchantId))
+            ->limit(200)
             ->get();
     }
 
@@ -1605,28 +1613,27 @@ final readonly class OrderQueryFilter
 ```
 
 ```php
-final class OrderIndexController
+final class SearchOrdersRequest extends FormRequest
 {
-    public function __invoke(Request $request, OrderRepositoryInterface $orders): View
+    public function toFilter(): OrderQueryFilter
     {
-        $dateRange = ($request->filled('from') || $request->filled('to'))
-            ? new DateRange($request->date('from')?->toImmutable(), $request->date('to')?->toImmutable())
-            : null;
-
-        $filter = new OrderQueryFilter(
-            merchantId: $request->integer('merchant_id') ?: null,
-            status: $request->enum('status', OrderStatus::class),
-            dateRange: $dateRange,
-            search: $request->string('search')->trim()->toString() ?: null,
-            sorting: $request->filled('sort')
-                ? new Sorting($request->string('sort')->toString(), Direction::from($request->string('dir', 'desc')->toString()))
+        return new OrderQueryFilter(
+            merchantId: $this->integer('merchant_id') ?: null,
+            status: $this->enum('status', OrderStatus::class),
+            dateRange: $this->filled('from') || $this->filled('to')
+                ? new DateRange($this->date('from')?->toImmutable(), $this->date('to')?->toImmutable())
                 : null,
+            search: $this->validated('search'),
+            sorting: Sorting::tryFromString($this->validated('sort'), Sorting::latest()),
         );
-
-        return view('admin.orders.index', ['orders' => $orders->searchOrders($filter, perPage: 25)]);
     }
 }
+
+// The controller is one line, and the export command builds the same filter from its arguments.
+return view('admin.orders.index', ['orders' => $orders->searchOrders($request->toFilter(), perPage: 25)]);
 ```
+
+The mapping lives in the Form Request, next to the rules that validated the input — not in the controller, where it would run on raw request values. See the `laravel-rest-api` skill's `request-to-dto` rule and `rules/vo-named-constructor-parses-input.md`.
 
 Named arguments keep the call readable as the DTO grows.
 
@@ -2346,7 +2353,7 @@ final readonly class OrderPlaced
 }
 
 // Domain/Orders/Actions/PlaceOrderAction.php
-DB::transaction(fn () => $order = $this->orders->place($data));
+$order = DB::transaction(fn (): Order => $this->orders->place($data));
 OrderPlaced::dispatch($order->tenantId(), $order->id());
 
 // Domain/Billing/Listeners/RecordOrderUsage.php   — queued, Billing's data only

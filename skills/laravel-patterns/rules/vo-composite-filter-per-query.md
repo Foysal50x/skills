@@ -35,27 +35,26 @@ final readonly class OrderQueryFilter
 ```
 
 ```php
-final class OrderIndexController
+final class SearchOrdersRequest extends FormRequest
 {
-    public function __invoke(Request $request, OrderRepositoryInterface $orders): View
+    public function toFilter(): OrderQueryFilter
     {
-        $dateRange = ($request->filled('from') || $request->filled('to'))
-            ? new DateRange($request->date('from')?->toImmutable(), $request->date('to')?->toImmutable())
-            : null;
-
-        $filter = new OrderQueryFilter(
-            merchantId: $request->integer('merchant_id') ?: null,
-            status: $request->enum('status', OrderStatus::class),
-            dateRange: $dateRange,
-            search: $request->string('search')->trim()->toString() ?: null,
-            sorting: $request->filled('sort')
-                ? new Sorting($request->string('sort')->toString(), Direction::from($request->string('dir', 'desc')->toString()))
+        return new OrderQueryFilter(
+            merchantId: $this->integer('merchant_id') ?: null,
+            status: $this->enum('status', OrderStatus::class),
+            dateRange: $this->filled('from') || $this->filled('to')
+                ? new DateRange($this->date('from')?->toImmutable(), $this->date('to')?->toImmutable())
                 : null,
+            search: $this->validated('search'),
+            sorting: Sorting::tryFromString($this->validated('sort'), Sorting::latest()),
         );
-
-        return view('admin.orders.index', ['orders' => $orders->searchOrders($filter, perPage: 25)]);
     }
 }
+
+// The controller is one line, and the export command builds the same filter from its arguments.
+return view('admin.orders.index', ['orders' => $orders->searchOrders($request->toFilter(), perPage: 25)]);
 ```
+
+The mapping lives in the Form Request, next to the rules that validated the input — not in the controller, where it would run on raw request values. See the `laravel-rest-api` skill's `request-to-dto` rule and `rules/vo-named-constructor-parses-input.md`.
 
 Named arguments keep the call readable as the DTO grows.

@@ -136,10 +136,13 @@ Rule filenames are prefixed by section (`gate-`, `repo-`, `perf-`, `job-`). `SKI
 ```bash
 npm run build      # compile rules/*.md → AGENTS.md for every skill
 npm run validate   # frontmatter, prefix/section agreement, cross-references, size budgets
-npm run check      # both
+npm run lint       # holds every Correct example to the rest of the rule set
+npm run check      # all three
 ```
 
-CI runs both on every push and fails if `AGENTS.md` is stale.
+`npm run lint` is what stops a rule teaching one thing while its own example does another: it reads each `**Correct:**` block as code and checks it against the other rules — events dispatched inside a transaction, `scope`-prefixed methods, `serialize()` in a cache key, query construction in a Controller or Job, driver-specific SQL, CRUD-shaped repository methods — and runs `php -l` over the worked examples.
+
+CI runs all three on every push and fails if `AGENTS.md` is stale.
 
 ### Adding a rule
 

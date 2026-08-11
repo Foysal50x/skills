@@ -17,6 +17,9 @@ jobs:
         run: node scripts/build-agents.mjs
       - name: Validate skills
         run: node scripts/validate.mjs
+
+      - name: Lint examples across rules
+        run: node scripts/lint-examples.mjs
       - name: Fail if AGENTS.md is stale
         run: |
           if ! git diff --quiet -- 'skills/*/AGENTS.md'; then

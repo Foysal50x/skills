@@ -39,12 +39,15 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
         return $this->searchOrders->handle($filter)->paginate($perPage);
     }
 
-    // Inlined: one condition, no rules worth naming.
+    // Inlined: one condition, no rules worth naming. Bounded, and it feeds the
+    // ops queue rather than a list endpoint — anything a client pages through
+    // returns a paginator instead.
     public function pendingOrders(?int $merchantId = null): Collection
     {
         return Order::query()
             ->where('status', OrderStatus::Pending)
             ->when($merchantId !== null, fn (Builder $q) => $q->where('merchant_id', $merchantId))
+            ->limit(200)
             ->get();
     }
 

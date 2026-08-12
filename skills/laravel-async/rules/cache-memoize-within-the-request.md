@@ -40,4 +40,6 @@ public function permissions(): Collection
 }
 ```
 
-`Cache::memo()` is a decorator, not a store: it still reads through to Redis once, and `put()` or `forget()` through it invalidates the in-memory copy. Available in Laravel 13 and recent 12.x releases — check your version before relying on it. Use `once()` when the value is derived rather than cached.
+`Cache::memo()` is a decorator, not a store: it still reads through to Redis once, and `put()` or `forget()` through it invalidates the in-memory copy. Available in Laravel 13 and recent 12.x releases — check your version before relying on it.
+
+Both are scoped to a lifetime, and the lifetime is longer than you think under Octane, Swoole or a long-lived worker: `once()` lives as long as the object, so a singleton keeps its first answer for the life of the process, and a `memo()` store must be flushed between requests. Reach for either only when the value genuinely cannot change within that window, and never for anything tenant-scoped on a shared instance.

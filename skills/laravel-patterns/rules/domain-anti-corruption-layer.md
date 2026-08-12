@@ -42,14 +42,20 @@ final readonly class OpenAiProvider implements AiProviderInterface
 {
     public function complete(PromptContext $context): Completion
     {
-        $response = $this->http->post('/v1/chat/completions', $this->toPayload($context))->json();
+        $response = $this->http
+            ->timeout(20)
+            ->post('/v1/chat/completions', $this->toPayload($context));
+
+        if ($response->failed()) {
+            throw AiProviderUnavailable::from($response->status());   // domain exception
+        }
 
         return new Completion(
-            content: $response['choices'][0]['message']['content'],
-            tokens: $response['usage']['total_tokens'],
+            content: $response->json('choices.0.message.content'),
+            tokens: $response->json('usage.total_tokens'),
         );
     }
 }
 ```
 
-The domain now depends on `Completion`. Swapping providers, or absorbing a breaking upstream change, edits one class.
+The domain now depends on `Completion`. Swapping providers, or absorbing a breaking upstream change, edits one class. The translation is not only of the happy path: the adapter is also where the upstream's timeouts and status codes become the domain's own exception type, so no `RequestException` reaches a use case.

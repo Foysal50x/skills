@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Repository Overview
 
-A collection of Laravel engineering skills for AI coding agents. Five skills, 193 rules, targeting Laravel `^12.0 || ^13.0` on PHP `^8.3`.
+A collection of Laravel engineering skills for AI coding agents. Five skills, 198 rules, targeting Laravel `^12.0 || ^13.0` on PHP `^8.3`.
 
 This repo contains **documentation, not application code**. There is no PHP to run — the PHP in rule files is illustrative.
 
@@ -46,6 +46,13 @@ Always run `npm run check` before committing. CI fails if `AGENTS.md` is stale.
 ### Examples must obey the other rules
 
 `validate.mjs` checks a rule's *structure*. `lint-examples.mjs` checks its *content*: it walks every fenced block in `SKILL.md`, `rules/` and `references/` plus every `examples/**/*.php`, classifies each block as correct or incorrect by the nearest `**Correct` / `**Incorrect` marker, and holds the correct ones to the rest of the rule set — no side effect dispatched inside `DB::transaction()`, no `scope`-prefixed methods, no `serialize()` in a cache key, no query construction inside a Controller, Job, Listener or Command, no driver-specific SQL outside an Expression class, no CRUD-shaped repository methods, one PHP type per example file, and `php -l` over the worked examples.
+
+Two of the checks guard facts rather than style:
+
+- **`unverified-api`** — a denylist of symbols that read as if they exist but do not (`AvgFilter`, `Illuminate\Http\Resources\Json\JsonApiResource`, …). Every entry was a real defect found by hand; adding one is how a wrong API stays fixed.
+- **`unverified-claim`** — prose assertions about the framework that are wrong however confidently phrased (DynamoDB supporting cache tags, `retryUntil()` needing `$tries = 0`). Each is tested against the part of the line *before* any negation, so a rule that names a store as unsupported reads as the correction it is.
+
+`php -l` also runs over fenced `php` blocks, but only those that read as a whole file — a type declared at column 0 with no loose members, no bodyless declarations and no `...` elision. Most blocks are fragments PHP cannot parse, and linting them would be noise, not coverage.
 
 A rule that teaches one thing while its example does another is worse than no rule. When a check fires, fix the example — reach for an `allow` entry on the check only when a rule's whole subject *is* the pattern.
 

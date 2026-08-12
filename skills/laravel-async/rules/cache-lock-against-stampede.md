@@ -24,7 +24,8 @@ public function statsFor(int $merchantId, DateRange $period): OrderStats
 {
     $key = $this->key($merchantId, $period);
 
-    if ($cached = Cache::get($key)) {
+    // Explicit null test — 0, '' and false are cached values, not misses.
+    if (($cached = Cache::get($key)) !== null) {
         return $cached;
     }
 

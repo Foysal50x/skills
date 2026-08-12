@@ -86,7 +86,7 @@ return Order::query()
 
 Wrap the iteration in a Query Class so the batching rule lives with the query.
 
-One trap in the list above: `cursor()` silently ignores `with()`, so every relation access inside the loop is a fresh query. Use `lazy()` or `lazyById()` when the loop reads relations, and keep `cursor()` for attribute-only passes.
+One trap in the list above: `cursor()` hydrates one model at a time, so it never runs the eager loads `with()` registered. The query is correct; the relations simply arrive lazily, one query per access. Use `lazy()` or `lazyById()` when the loop reads relations, and keep `cursor()` for attribute-only passes.
 
 ---
 
@@ -168,11 +168,11 @@ The same distinction applies to `doesntExist()` versus `count() === 0`, and to `
 
 ---
 
-## Index Every Column You Filter, Join or Sort On
+## Index the Access Patterns You Filter, Join and Sort By
 
 A Query Class that filters on `merchant_id`, `status` and `created_at` needs those columns indexed. Composite indexes are ordered: put equality columns first, the range column last, and match the order to the query.
 
-Foreign keys created with `foreignId()->constrained()` are indexed. Columns filtered by convention — `status`, `type`, `tenant_id`, `archived_at` — usually are not.
+Index the access pattern, not the column list: one composite index usually replaces three single-column ones, and a low-cardinality column such as `status` earns nothing on its own. Every index is paid for on every write, so add them from measured queries and drop the ones `EXPLAIN` never picks.
 
 **Incorrect (query written, index forgotten):**
 
@@ -199,10 +199,11 @@ Schema::create('orders', function (Blueprint $table): void {
 Schema::create('orders', function (Blueprint $table): void {
     $table->id();
     $table->foreignId('merchant_id')->constrained();
-    $table->string('status')->index();
+    $table->string('status');
     $table->timestamps();
 
-    // equality, equality, range/sort — in that order
+    // equality, equality, range/sort — in that order. One index, not three:
+    // it also serves ('merchant_id') and ('merchant_id', 'status') alone.
     $table->index(['merchant_id', 'status', 'created_at']);
 });
 ```
@@ -501,9 +502,9 @@ An internal method that genuinely must return everything should stream instead �
 
 ## Use cursorPaginate for Deep or Fast-Growing Sets
 
-`OFFSET 100000` makes the database read and discard 100,000 rows. Cursor pagination uses a `WHERE` on the ordering column instead, so page 5,000 costs the same as page 1. It also avoids skipped and repeated rows when the set changes between requests.
+`OFFSET 100000` makes the database read and discard 100,000 rows. Cursor pagination uses a `WHERE` on the ordering column instead, so page 5,000 costs about what page 1 costs — provided an index covers that ordering. Rows inserted or deleted between requests no longer shift the window, so they are not skipped or repeated.
 
-The cost: no page numbers, no jumping to an arbitrary page, and the ordering column must be unique (or paired with a unique tiebreaker).
+The cost: no page numbers, no jumping to an arbitrary page, and the ordering must be unique (or paired with a unique tiebreaker). Order by something that does not change under you — an `updated_at` cursor still skips and repeats rows, because editing a row moves it.
 
 **Incorrect (deep pages, live feed):**
 
@@ -681,7 +682,11 @@ DB::transaction(function () use ($order): void {
 ```php
 $order->update(['status' => OrderStatus::Processing]);
 
-$charge = $this->payments->charge($order->total, $order->paymentToken());
+$charge = $this->payments->charge(
+    amount: $order->total,
+    token: $order->paymentToken(),
+    idempotencyKey: "order-{$order->id}-charge",
+);
 
 DB::transaction(function () use ($order, $charge): void {
     $order->update(['status' => OrderStatus::Paid, 'charge_id' => $charge->id]);
@@ -691,7 +696,9 @@ DB::transaction(function () use ($order, $charge): void {
 OrderPaid::dispatch($order->tenantId(), $order->id());
 ```
 
-If the external call must be atomic with the write, that is a saga or an outbox — not a longer transaction.
+Moving the call out does not make the pair atomic — it moves the failure. If the transaction fails after the charge succeeds, the customer is charged and the order is not paid. That is why the charge carries an idempotency key: a retry re-attaches the same charge instead of creating a second one, and a reconciliation job can settle any `Processing` order left behind by asking the provider what happened to that key.
+
+A longer transaction does not fix this. Atomicity across a network boundary is a saga or an outbox.
 
 ---
 
@@ -1349,7 +1356,7 @@ A migration is the only description of the schema that every environment agrees 
 
 A plain `unsignedBigInteger('user_id')` is a number with a naming convention attached. Nothing stops a delete from leaving rows pointing at a user that no longer exists, and the bug surfaces months later as a null relation in a report.
 
-`foreignId()->constrained()` names the constraint, adds the index and enforces the reference. Always state what a parent delete does — the default is to refuse it, and silence about that is a decision nobody made on purpose.
+`foreignId()->constrained()` names the constraint and enforces the reference. Always state what a parent delete does — the default is to refuse it, and silence about that is a decision nobody made on purpose.
 
 **Incorrect (an integer column that documents an intention):**
 
@@ -1376,6 +1383,8 @@ Schema::create('invoices', function (Blueprint $table): void {
 `constrained('users')` covers the non-conventional column name. The behaviours are `cascadeOnDelete()`, `nullOnDelete()`, `restrictOnDelete()` and `noActionOnDelete()` — pick per relationship, not per project.
 
 Cascading deletes at the database level skip model events, so an observer that cleans up files or search indexes will not run. Where that matters, use `restrictOnDelete()` and delete through the domain.
+
+Indexing is the driver's business, not the schema builder's: MySQL and MariaDB create an index for the constraint automatically, PostgreSQL and SQL Server do not. Add `->index()` yourself unless the target is MySQL only.
 
 ---
 
@@ -1510,7 +1519,7 @@ Test it the cheap way: run `php artisan migrate` then `php artisan migrate:rollb
 
 ## Keep Schema Changes and Data Changes in Separate Migrations
 
-A migration that creates a table and then fills it has two ways to fail and one row in the `migrations` table. If the insert throws, the DDL has already committed on MySQL — which does not roll back schema changes — so the migration is recorded as failed, cannot be re-run, and the table exists half-configured.
+A migration that creates a table and then fills it has two ways to fail and one row in the `migrations` table. Laravel only records a migration once `up()` returns, so an insert that throws records nothing — while on MySQL, where DDL is not transactional, the table is already there. Re-running the migration now fails on `Schema::create()` instead of retrying the backfill, and the fix is manual.
 
 Split them: one migration for structure, one for data. Better still, put the backfill in a queued job or a console command so it can be re-run, chunked and monitored.
 
@@ -1572,7 +1581,6 @@ return [
     'paid' => Order::where('status', 'paid')->count(),
     'refunded' => Order::where('status', 'refunded')->count(),
     'revenue' => Order::where('status', 'paid')->sum('total'),
-    'avg_basket' => Order::where('status', 'paid')->avg('total'),
 ];
 ```
 
@@ -1591,7 +1599,6 @@ final readonly class OrderStatsQuery
                 new Alias(new CountFilter($paid), 'paid'),
                 new Alias(new CountFilter(new Equal('status', new Value('refunded'))), 'refunded'),
                 new Alias(new SumFilter('total', $paid), 'revenue'),
-                new Alias(new AvgFilter('total', $paid), 'avg_basket'),
             ])
             ->where('merchant_id', $merchantId)
             ->tap(fn (Builder $q) => $this->applyDateRange($q, $period, 'created_at'))
@@ -1601,9 +1608,9 @@ final readonly class OrderStatsQuery
 }
 ```
 
-`toBase()` skips model hydration — there is no model here, only numbers. Cache the result if the panel is hit on every page load.
+Add `toBase()` when the result is a row of scalars rather than models — it skips hydration entirely, which is the whole point of collapsing the counts into one query. Cache the result if the panel is hit on every page load.
 
-Add `toBase()` when the result is a row of scalars rather than models — it skips hydration entirely, which is the whole point of collapsing the counts into one query.
+`tpetry/laravel-query-expressions` ships `CountFilter` and `SumFilter` but no filtered average, so derive one from the row rather than inventing a class name: `$row->paid > 0 ? $row->revenue / $row->paid : 0`.
 
 ---
 
@@ -1780,7 +1787,8 @@ $quota->update(['credits' => DB::raw('credits - 15')]);
 use Tpetry\QueryExpressions\Function\Aggregate\CountFilter;
 use Tpetry\QueryExpressions\Operator\Comparison\Equal;
 use Tpetry\QueryExpressions\Operator\Arithmetic\Subtract;
-use Tpetry\QueryExpressions\Language\{Alias, Value};
+use Tpetry\QueryExpressions\Language\Alias;
+use Tpetry\QueryExpressions\Value\Value;
 
 Movie::select([
     new Alias(new CountFilter(new Equal('released', new Value(2021))), 'released_2021'),
@@ -1790,7 +1798,7 @@ Movie::select([
 $quota->update(['credits' => new Subtract('credits', new Value(15))]);
 ```
 
-Available groups: value/wrap (`Value`, `Alias`), CASE (`CaseGroup`, `CaseRule`), arithmetic (`Add`, `Subtract`, `Multiply`, `Divide`, `Modulo`, `Power`), comparison (`Equal`, `GreaterThan`, `Between`, `IsNull`, …), logical (`CondAnd`, `CondOr`, `CondNot`), bitwise, aggregates (`Count`, `CountFilter`, `Sum`, `SumFilter`, `Avg`, `Min`, `Max`), conditional (`Coalesce`, `Greatest`, `Least`), string (`Concat`, `Lower`, `Upper`, `Uuid4`), time (`Now`, `ExtractDatePart`, `TimestampBin`), math (`Abs`).
+Namespaces differ per group — `Value` and `Number` live under `Value\`, `Alias`, `Cast`, `CaseGroup` and `CaseRule` under `Language\`. Aggregates are `Count`, `CountFilter`, `Sum`, `SumFilter`, `Avg`, `Min`, `Max` under `Function\Aggregate\`: only `Count` and `Sum` have a `…Filter` variant. Check the class exists in the installed version before using it — an invented name is a fatal error, not a fallback.
 
 ---
 

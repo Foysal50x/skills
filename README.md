@@ -1,6 +1,6 @@
 # Laravel Skills
 
-Opinionated Laravel engineering skills for AI coding agents. 193 rules across five skills, built for domain-driven Laravel applications.
+Opinionated Laravel engineering skills for AI coding agents. 198 rules across five skills, built for domain-driven Laravel applications.
 
 Skills follow the [Agent Skills](https://agentskills.io/) format and work with Claude Code, Cursor, Copilot and anything else that reads `SKILL.md`.
 
@@ -77,7 +77,7 @@ Data-layer engineering: what goes *inside* a Query Class, plus migrations. 45 ru
 
 ### laravel-rest-api
 
-The edge in both directions: HTTP into domain types, and outbound API calls. 35 rules.
+The edge in both directions: HTTP into domain types, and outbound API calls. 37 rules.
 
 **Use when:**
 
@@ -90,7 +90,7 @@ The edge in both directions: HTTP into domain types, and outbound API calls. 35 
 
 ### laravel-async
 
-Work that happens outside the request. 33 rules.
+Work that happens outside the request. 36 rules.
 
 **Use when:**
 

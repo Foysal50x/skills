@@ -46,6 +46,11 @@ final class InvoicePaid extends Notification implements ShouldQueue
 final class StatementReady extends Mailable implements ShouldQueue
 {
     use Queueable;
+
+    public function __construct(private readonly int $statementId)
+    {
+        $this->afterCommit();
+    }
 }
 ```
 

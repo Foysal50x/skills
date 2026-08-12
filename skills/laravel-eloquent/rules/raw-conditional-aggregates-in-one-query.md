@@ -17,7 +17,6 @@ return [
     'paid' => Order::where('status', 'paid')->count(),
     'refunded' => Order::where('status', 'refunded')->count(),
     'revenue' => Order::where('status', 'paid')->sum('total'),
-    'avg_basket' => Order::where('status', 'paid')->avg('total'),
 ];
 ```
 
@@ -36,7 +35,6 @@ final readonly class OrderStatsQuery
                 new Alias(new CountFilter($paid), 'paid'),
                 new Alias(new CountFilter(new Equal('status', new Value('refunded'))), 'refunded'),
                 new Alias(new SumFilter('total', $paid), 'revenue'),
-                new Alias(new AvgFilter('total', $paid), 'avg_basket'),
             ])
             ->where('merchant_id', $merchantId)
             ->tap(fn (Builder $q) => $this->applyDateRange($q, $period, 'created_at'))
@@ -46,6 +44,6 @@ final readonly class OrderStatsQuery
 }
 ```
 
-`toBase()` skips model hydration — there is no model here, only numbers. Cache the result if the panel is hit on every page load.
+Add `toBase()` when the result is a row of scalars rather than models — it skips hydration entirely, which is the whole point of collapsing the counts into one query. Cache the result if the panel is hit on every page load.
 
-Add `toBase()` when the result is a row of scalars rather than models — it skips hydration entirely, which is the whole point of collapsing the counts into one query.
+`tpetry/laravel-query-expressions` ships `CountFilter` and `SumFilter` but no filtered average, so derive one from the row rather than inventing a class name: `$row->paid > 0 ? $row->revenue / $row->paid : 0`.

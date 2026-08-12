@@ -29,7 +29,11 @@ DB::transaction(function () use ($order): void {
 ```php
 $order->update(['status' => OrderStatus::Processing]);
 
-$charge = $this->payments->charge($order->total, $order->paymentToken());
+$charge = $this->payments->charge(
+    amount: $order->total,
+    token: $order->paymentToken(),
+    idempotencyKey: "order-{$order->id}-charge",
+);
 
 DB::transaction(function () use ($order, $charge): void {
     $order->update(['status' => OrderStatus::Paid, 'charge_id' => $charge->id]);
@@ -39,4 +43,6 @@ DB::transaction(function () use ($order, $charge): void {
 OrderPaid::dispatch($order->tenantId(), $order->id());
 ```
 
-If the external call must be atomic with the write, that is a saga or an outbox — not a longer transaction.
+Moving the call out does not make the pair atomic — it moves the failure. If the transaction fails after the charge succeeds, the customer is charged and the order is not paid. That is why the charge carries an idempotency key: a retry re-attaches the same charge instead of creating a second one, and a reconciliation job can settle any `Processing` order left behind by asking the provider what happened to that key.
+
+A longer transaction does not fix this. Atomicity across a network boundary is a saga or an outbox.

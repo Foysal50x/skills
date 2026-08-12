@@ -1,15 +1,15 @@
 ---
-title: Index Every Column You Filter, Join or Sort On
+title: Index the Access Patterns You Filter, Join and Sort By
 impact: HIGH
 impactDescription: the difference between a seek and a full table scan
 tags: performance, indexing, migrations, database
 ---
 
-## Index Every Column You Filter, Join or Sort On
+## Index the Access Patterns You Filter, Join and Sort By
 
 A Query Class that filters on `merchant_id`, `status` and `created_at` needs those columns indexed. Composite indexes are ordered: put equality columns first, the range column last, and match the order to the query.
 
-Foreign keys created with `foreignId()->constrained()` are indexed. Columns filtered by convention — `status`, `type`, `tenant_id`, `archived_at` — usually are not.
+Index the access pattern, not the column list: one composite index usually replaces three single-column ones, and a low-cardinality column such as `status` earns nothing on its own. Every index is paid for on every write, so add them from measured queries and drop the ones `EXPLAIN` never picks.
 
 **Incorrect (query written, index forgotten):**
 
@@ -36,10 +36,11 @@ Schema::create('orders', function (Blueprint $table): void {
 Schema::create('orders', function (Blueprint $table): void {
     $table->id();
     $table->foreignId('merchant_id')->constrained();
-    $table->string('status')->index();
+    $table->string('status');
     $table->timestamps();
 
-    // equality, equality, range/sort — in that order
+    // equality, equality, range/sort — in that order. One index, not three:
+    // it also serves ('merchant_id') and ('merchant_id', 'status') alone.
     $table->index(['merchant_id', 'status', 'created_at']);
 });
 ```

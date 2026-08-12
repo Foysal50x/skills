@@ -7,9 +7,9 @@ tags: service, reuse, decision
 
 ## A Service Serves Two or More Actions
 
-A Service is mandatory when the business logic is invoked by two or more Actions, or when it is complex enough that isolating it materially improves testability. Those are the only two triggers.
+Reuse is the default trigger: business logic invoked by two or more Actions belongs in a Service. The one exception is logic complex enough that testing it through its single caller hides the cases that matter — a pricing engine, a proration rule, a state machine.
 
-It is forbidden when the logic is used in exactly one Action.
+With one caller and no such complexity, a Service is forbidden. "It might be reused later" is not the exception; name the cases you cannot reach through the Action, or leave it inline.
 
 **Incorrect (single caller wrapped for symmetry):**
 
@@ -40,4 +40,4 @@ final readonly class UsageCalculatorService
 }
 ```
 
-Counting callers is the test. If there is one, keep it in the Action — see `rules/action-keep-single-use-logic-inline.md`.
+Count callers first. If there is one, keep it in the Action unless you can name the tests the extraction unlocks — see `rules/action-keep-single-use-logic-inline.md` and `rules/gate-service-only-when-reused.md`.

@@ -27,7 +27,7 @@ public function toArray(Request $request): array
 **Correct (Laravel 13):**
 
 ```php
-use Illuminate\Http\Resources\Json\JsonApiResource;
+use Illuminate\Http\Resources\JsonApi\JsonApiResource;
 
 final class OrderResource extends JsonApiResource
 {

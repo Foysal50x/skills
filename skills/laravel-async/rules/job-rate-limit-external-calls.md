@@ -36,16 +36,18 @@ RateLimiter::for('crm', fn () => Limit::perMinute(60));
 ```php
 final class SyncContactToCrm implements ShouldQueue
 {
-    public int $tries = 5;
+    public int $tries = 25;   // a throttled release counts as an attempt
 
     /** @return list<object> */
     public function middleware(): array
     {
-        return [(new RateLimited('crm'))->dontRelease()];
+        return [new RateLimited('crm')];
     }
 }
 ```
 
-`RateLimited` releases the job with a delay by default, so a throttled job returns to the queue rather than burning an attempt. `dontRelease()` is for the case where you would rather the job wait in the worker than churn the queue.
+`RateLimited` releases a throttled job back to the queue with a delay taken from the limiter. A release still increments the attempt counter, so a job that is throttled repeatedly will exhaust `$tries` without ever having run — give it a generous `$tries`, or time-box it with `retryUntil()` instead.
+
+Do not reach for `dontRelease()` to "make the job wait". It makes the middleware return `false`, so the throttled job is neither run nor released, and the worker deletes it. The work is silently dropped. Use it only when losing the job is genuinely acceptable.
 
 For a limit that is about not overlapping rather than not exceeding a rate, use `WithoutOverlapping` keyed by the resource.

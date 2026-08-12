@@ -38,7 +38,9 @@ final class TrackOrderPlaced implements ShouldQueue
 
     public function handle(OrderPlaced $event): void
     {
-        Http::timeout(5)->post(config('analytics.url'), ['order' => $event->orderId->value]);
+        Http::timeout(5)
+            ->post(config('analytics.url'), ['order' => $event->orderId->value])
+            ->throw();   // a 500 must fail the job, not pass silently
     }
 
     public function failed(OrderPlaced $event, Throwable $e): void

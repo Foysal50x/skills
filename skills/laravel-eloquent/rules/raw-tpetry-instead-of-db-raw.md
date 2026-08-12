@@ -28,7 +28,8 @@ $quota->update(['credits' => DB::raw('credits - 15')]);
 use Tpetry\QueryExpressions\Function\Aggregate\CountFilter;
 use Tpetry\QueryExpressions\Operator\Comparison\Equal;
 use Tpetry\QueryExpressions\Operator\Arithmetic\Subtract;
-use Tpetry\QueryExpressions\Language\{Alias, Value};
+use Tpetry\QueryExpressions\Language\Alias;
+use Tpetry\QueryExpressions\Value\Value;
 
 Movie::select([
     new Alias(new CountFilter(new Equal('released', new Value(2021))), 'released_2021'),
@@ -38,4 +39,4 @@ Movie::select([
 $quota->update(['credits' => new Subtract('credits', new Value(15))]);
 ```
 
-Available groups: value/wrap (`Value`, `Alias`), CASE (`CaseGroup`, `CaseRule`), arithmetic (`Add`, `Subtract`, `Multiply`, `Divide`, `Modulo`, `Power`), comparison (`Equal`, `GreaterThan`, `Between`, `IsNull`, …), logical (`CondAnd`, `CondOr`, `CondNot`), bitwise, aggregates (`Count`, `CountFilter`, `Sum`, `SumFilter`, `Avg`, `Min`, `Max`), conditional (`Coalesce`, `Greatest`, `Least`), string (`Concat`, `Lower`, `Upper`, `Uuid4`), time (`Now`, `ExtractDatePart`, `TimestampBin`), math (`Abs`).
+Namespaces differ per group — `Value` and `Number` live under `Value\`, `Alias`, `Cast`, `CaseGroup` and `CaseRule` under `Language\`. Aggregates are `Count`, `CountFilter`, `Sum`, `SumFilter`, `Avg`, `Min`, `Max` under `Function\Aggregate\`: only `Count` and `Sum` have a `…Filter` variant. Check the class exists in the installed version before using it — an invented name is a fatal error, not a fallback.

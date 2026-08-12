@@ -7,9 +7,9 @@ tags: pagination, cursor, performance
 
 ## Use cursorPaginate for Deep or Fast-Growing Sets
 
-`OFFSET 100000` makes the database read and discard 100,000 rows. Cursor pagination uses a `WHERE` on the ordering column instead, so page 5,000 costs the same as page 1. It also avoids skipped and repeated rows when the set changes between requests.
+`OFFSET 100000` makes the database read and discard 100,000 rows. Cursor pagination uses a `WHERE` on the ordering column instead, so page 5,000 costs about what page 1 costs — provided an index covers that ordering. Rows inserted or deleted between requests no longer shift the window, so they are not skipped or repeated.
 
-The cost: no page numbers, no jumping to an arbitrary page, and the ordering column must be unique (or paired with a unique tiebreaker).
+The cost: no page numbers, no jumping to an arbitrary page, and the ordering must be unique (or paired with a unique tiebreaker). Order by something that does not change under you — an `updated_at` cursor still skips and repeats rows, because editing a row moves it.
 
 **Incorrect (deep pages, live feed):**
 

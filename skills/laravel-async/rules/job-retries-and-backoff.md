@@ -9,7 +9,7 @@ tags: jobs, retries, backoff, resilience
 
 The defaults are wrong for most jobs. Unlimited tries turn a permanently failing job into an infinite loop that starves the queue. No backoff hammers an upstream that is already struggling. No timeout lets one hung HTTP call occupy a worker forever.
 
-Set all three explicitly, with exponential backoff for anything that talks to a network.
+Set all three explicitly, with a backoff that grows between attempts for anything that talks to a network.
 
 **Incorrect (retries immediately and forever against a rate-limited API):**
 
@@ -32,16 +32,10 @@ final class SyncToUpstream implements ShouldQueue
     public int $timeout = 30;
     public int $maxExceptions = 3;
 
-    /** Exponential backoff with a ceiling: 10s, 30s, 2m, 5m, 10m. */
+    /** Escalating, with a ceiling: 10s, 30s, 2m, 5m, 10m. */
     public function backoff(): array
     {
         return [10, 30, 120, 300, 600];
-    }
-
-    /** Stop retrying after this instant regardless of attempts left. */
-    public function retryUntil(): DateTimeInterface
-    {
-        return now()->addHours(6);
     }
 }
 ```
@@ -63,11 +57,9 @@ final class SyncToUpstream implements ShouldQueue
 
 Add jitter when many jobs retry together, or they synchronize into a thundering herd.
 
-A time-boxed job uses `retryUntil()` instead of a count — and must set `$tries = 0`, or the attempt limit fires before the deadline does:
+`retryUntil()` and `$tries` are not additive: once `retryUntil()` returns a value, the worker checks the deadline and ignores the attempt limit entirely. Pick one. A time-boxed job declares only the deadline, and leaves `$tries` off:
 
 ```php
-public int $tries = 0;
-
 public function retryUntil(): DateTimeInterface
 {
     return now()->addHours(4);

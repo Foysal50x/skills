@@ -60,6 +60,58 @@ Batches need the `job_batches` table (`php artisan queue:batches-table`). Inside
 
 ---
 
+## Fail Permanent Errors Immediately Instead of Retrying Them
+
+A 422 from a validation error, a deleted record, a malformed payload from an old release — none of these get better on the fourth attempt. Retrying them burns worker time, delays healthy jobs behind them, and buries the real signal under repeated identical exceptions.
+
+Separate the two classes of failure at the throw site: transient (retry) and permanent (stop now).
+
+**Incorrect (a permanently invalid payload retried five times over half an hour):**
+
+```php
+public function handle(CrmClient $crm): void
+{
+    $contact = Contact::find($this->contactId);
+
+    $crm->upsert($contact->toArray());   // 422 from the provider, retried until $tries runs out
+}
+```
+
+**Correct (permanent failures end the job on the first attempt):**
+
+```php
+use Illuminate\Queue\InteractsWithQueue;
+
+final class SyncContactToCrm implements ShouldQueue
+{
+    use InteractsWithQueue;   // delete(), fail() and release() come from here
+
+    public int $tries = 5;
+
+    public function handle(ContactRepositoryInterface $contacts, CrmClient $crm): void
+    {
+        $contact = $contacts->findForSync($this->contactId);
+
+        if ($contact === null) {
+            $this->delete();   // deleted since dispatch — nothing to retry
+            return;
+        }
+
+        try {
+            $crm->upsert($contact);
+        } catch (CrmRejectedPayload $e) {
+            $this->fail($e);   // straight to failed_jobs, no further attempts
+        }
+    }
+}
+```
+
+`$this->delete()` drops a job that no longer has work to do; `$this->fail($e)` records it in `failed_jobs` with its exception so it can be inspected and replayed. Both skip the remaining attempts.
+
+`failed_jobs` is the dead-letter queue — treat it as one. Alert on arrivals rather than on depth, prune it on a schedule, and fix the cause before `queue:retry`. See `rules/job-handle-failure-explicitly.md` for what `failed()` should do when the job does exhaust its attempts.
+
+---
+
 ## Decide What Happens When a Job Finally Fails
 
 After the last attempt a job lands in `failed_jobs` and, by default, nothing else happens. For anything a user is waiting on, that is a silent failure: no notification, no state change, no alert.
@@ -116,9 +168,9 @@ Alert on failed-job count, not just on a dashboard nobody opens. Retry with `php
 
 ## Make Every Job Handler Idempotent
 
-Queues deliver at least once. A worker that crashes after doing the work but before acknowledging the job causes a retry — so every handler must be safe to run twice.
+Queues deliver at least once: a crash after the work but before the acknowledgement causes a retry. Two attempts can also run *at the same time*, when a timeout releases a job the first copy is still working on.
 
-The techniques, in order of preference: a unique constraint the second attempt violates harmlessly, a guard on current state, or an explicit processed-marker keyed by an idempotency key.
+So the guard must be atomic — a unique constraint, a conditional `UPDATE` whose affected-row count picks the winner, or `SELECT … FOR UPDATE`. A read-then-check is not a guard: both workers read `Pending` and both charge.
 
 **Incorrect (retry charges the customer twice):**
 
@@ -136,41 +188,44 @@ final class ChargeOrder implements ShouldQueue
 }
 ```
 
-**Correct (guard on state, and give the gateway an idempotency key):**
+**Correct (atomic claim, plus an idempotency key the gateway honours):**
 
 ```php
 final class ChargeOrder implements ShouldQueue
 {
     public function __construct(private readonly int $orderId) {}
 
-    public function handle(PaymentGateway $gateway): void
+    public function handle(OrderRepositoryInterface $orders, PaymentGateway $gateway): void
     {
-        $order = Order::findOrFail($this->orderId);
+        // One conditional UPDATE behind the interface — exactly one caller wins.
+        $order = $orders->claimPendingForCharge($this->orderId);
 
-        if ($order->status !== OrderStatus::Pending) {
-            return;   // already charged, or cancelled — nothing to do
+        if ($order === null) {
+            return;   // another attempt owns it, or it is no longer chargeable
         }
 
         $charge = $gateway->charge(
             amount: $order->total,
             token: $order->paymentToken(),
-            idempotencyKey: "order-{$order->id}-charge",
+            idempotencyKey: "order-{$order->id}-charge",   // the provider dedupes
         );
 
-        $order->update(['status' => OrderStatus::Paid, 'charge_id' => $charge->id]);
+        $orders->markPaid($order->id, $charge->id);
     }
 }
 ```
 
 ```php
-// Or let the database enforce it:
-UsageRecord::firstOrCreate(
+// Or let a unique index decide, without the read-then-insert race:
+UsageRecord::createOrFirst(
     ['tenant_id' => $tenantId, 'order_id' => $orderId],   // unique index
     ['amount' => $amount],
 );
 ```
 
-Test it by calling `handle()` twice and asserting the same end state.
+`createOrFirst()` catches the unique-constraint violation and re-reads; `firstOrCreate()` selects first, so two workers can both miss it.
+
+A crash between the claim and the gateway response leaves the row in `Charging` — a reconciliation job settles it against `order-{id}-charge`. Test two concurrent `handle()` calls, not two sequential ones.
 
 ---
 
@@ -304,17 +359,19 @@ RateLimiter::for('crm', fn () => Limit::perMinute(60));
 ```php
 final class SyncContactToCrm implements ShouldQueue
 {
-    public int $tries = 5;
+    public int $tries = 25;   // a throttled release counts as an attempt
 
     /** @return list<object> */
     public function middleware(): array
     {
-        return [(new RateLimited('crm'))->dontRelease()];
+        return [new RateLimited('crm')];
     }
 }
 ```
 
-`RateLimited` releases the job with a delay by default, so a throttled job returns to the queue rather than burning an attempt. `dontRelease()` is for the case where you would rather the job wait in the worker than churn the queue.
+`RateLimited` releases a throttled job back to the queue with a delay taken from the limiter. A release still increments the attempt counter, so a job that is throttled repeatedly will exhaust `$tries` without ever having run — give it a generous `$tries`, or time-box it with `retryUntil()` instead.
+
+Do not reach for `dontRelease()` to "make the job wait". It makes the middleware return `false`, so the throttled job is neither run nor released, and the worker deletes it. The work is silently dropped. Use it only when losing the job is genuinely acceptable.
 
 For a limit that is about not overlapping rather than not exceeding a rate, use `WithoutOverlapping` keyed by the resource.
 
@@ -324,7 +381,7 @@ For a limit that is about not overlapping rather than not exceeding a rate, use 
 
 The defaults are wrong for most jobs. Unlimited tries turn a permanently failing job into an infinite loop that starves the queue. No backoff hammers an upstream that is already struggling. No timeout lets one hung HTTP call occupy a worker forever.
 
-Set all three explicitly, with exponential backoff for anything that talks to a network.
+Set all three explicitly, with a backoff that grows between attempts for anything that talks to a network.
 
 **Incorrect (retries immediately and forever against a rate-limited API):**
 
@@ -347,16 +404,10 @@ final class SyncToUpstream implements ShouldQueue
     public int $timeout = 30;
     public int $maxExceptions = 3;
 
-    /** Exponential backoff with a ceiling: 10s, 30s, 2m, 5m, 10m. */
+    /** Escalating, with a ceiling: 10s, 30s, 2m, 5m, 10m. */
     public function backoff(): array
     {
         return [10, 30, 120, 300, 600];
-    }
-
-    /** Stop retrying after this instant regardless of attempts left. */
-    public function retryUntil(): DateTimeInterface
-    {
-        return now()->addHours(6);
     }
 }
 ```
@@ -378,11 +429,9 @@ final class SyncToUpstream implements ShouldQueue
 
 Add jitter when many jobs retry together, or they synchronize into a thundering herd.
 
-A time-boxed job uses `retryUntil()` instead of a count — and must set `$tries = 0`, or the attempt limit fires before the deadline does:
+`retryUntil()` and `$tries` are not additive: once `retryUntil()` returns a value, the worker checks the deadline and ignores the attempt limit entirely. Pick one. A time-boxed job declares only the deadline, and leaves `$tries` off:
 
 ```php
-public int $tries = 0;
-
 public function retryUntil(): DateTimeInterface
 {
     return now()->addHours(4);
@@ -642,6 +691,8 @@ DB::transaction(function () use ($data): void {
 
 Per-event rather than per-connection, an event class may implement `Illuminate\Contracts\Events\ShouldDispatchAfterCommit` — the same guarantee, declared where the event is defined. Notifications and mailables use `afterCommit()`; see `rules/event-queue-notifications-and-mailables.md`.
 
+What this does **not** buy is delivery. `afterCommit` only orders the queue write after the commit; if the process dies in that gap the row is committed and the job never existed. Where a lost side effect is unacceptable — a payment capture, a partner notification — write the intent into an outbox table inside the same transaction and let a worker publish it.
+
 ---
 
 ## Announce State Changes, Do Not Perform Side Effects Inline
@@ -749,6 +800,58 @@ A domain's `Events/` and `Contracts/` are public. Its `Models/`, `Repositories/`
 
 ---
 
+## Write an Outbox Row When the Side Effect Must Not Be Lost
+
+`afterCommit` fixes ordering, not delivery: it holds the dispatch until the commit succeeds, and if the process dies in that window the row is committed and the job never existed. Nobody notices, because nothing failed.
+
+Where losing the effect is unacceptable — a payout instruction, a partner notification, a ledger entry — the intent goes into a table inside the same transaction, and a worker publishes it afterwards. Committed together means never one without the other.
+
+**Incorrect (the write survives, the notification does not):**
+
+```php
+$order = DB::transaction(fn (): Order => $this->orders->place($data));
+
+NotifyFulfilmentPartner::dispatch($order->id());   // process dies here and it is simply gone
+```
+
+**Correct (intent and data commit together):**
+
+```php
+final readonly class PlaceOrderAction
+{
+    public function __construct(
+        private OrderRepositoryInterface $orders,
+        private OutboxInterface $outbox,
+    ) {}
+
+    public function handle(PlaceOrderData $data): Order
+    {
+        return DB::transaction(function () use ($data): Order {
+            $order = $this->orders->place($data);
+
+            // Same transaction, same fate.
+            $this->outbox->record('order.placed', ['order_id' => $order->id()->value]);
+
+            return $order;
+        });
+    }
+}
+```
+
+```php
+// Scheduled every minute: claim, publish, mark. Re-publishing is safe because
+// consumers are idempotent — see rules/job-idempotent-handlers.md.
+foreach ($this->outbox->claimUnpublished(limit: 500) as $message) {
+    PublishOutboxMessage::dispatch($message->id);
+}
+```
+
+The outbox buys at-least-once delivery, not exactly-once. Give the consumer a deduplication key, keep the table pruned, and alert on the age of the oldest unpublished row — a stalled relay is invisible otherwise.
+
+For everything else, `->afterCommit()` is the right amount of machinery: see `rules/event-dispatch-after-commit.md`.
+
+---
+
 ## Events Are Immutable and Past Tense
 
 An event records something that already happened, so its name is past tense and its data cannot change. A present-tense or imperative name — `SendOrderEmail`, `ProcessOrder` — is a command wearing an event's clothes, and it couples the producer to one consumer.
@@ -830,6 +933,11 @@ final class InvoicePaid extends Notification implements ShouldQueue
 final class StatementReady extends Mailable implements ShouldQueue
 {
     use Queueable;
+
+    public function __construct(private readonly int $statementId)
+    {
+        $this->afterCommit();
+    }
 }
 ```
 
@@ -870,7 +978,9 @@ final class TrackOrderPlaced implements ShouldQueue
 
     public function handle(OrderPlaced $event): void
     {
-        Http::timeout(5)->post(config('analytics.url'), ['order' => $event->orderId->value]);
+        Http::timeout(5)
+            ->post(config('analytics.url'), ['order' => $event->orderId->value])
+            ->throw();   // a 500 must fail the job, not pass silently
     }
 
     public function failed(OrderPlaced $event, Throwable $e): void
@@ -915,29 +1025,37 @@ php artisan queue:work redis
 ```
 
 ```php
+// Structured log plus a windowed counter, on every failure:
+Queue::failing(function (JobFailed $e): void {
+    Log::error('queue.job_failed', [
+        'job' => $e->job->resolveName(),
+        'queue' => $e->job->getQueue(),
+    ]);
+
+    $bucket = 'queue:failures:'.now()->format('YmdH');
+    Cache::add($bucket, 0, now()->addHours(3));
+    Cache::increment($bucket);
+});
+```
+
+```php
 // A health endpoint your monitor can poll
 final class QueueHealthController
 {
     public function __invoke(): JsonResponse
     {
         $depth = Queue::size('high');
-        $failed = app(FailedJobProviderInterface::class)->count();
+        $failuresThisHour = (int) Cache::get('queue:failures:'.now()->format('YmdH'), 0);
 
         return response()->json(
-            ['queue_depth' => $depth, 'failed_jobs' => $failed],
-            $depth > 1000 || $failed > 50 ? 503 : 200,
+            ['queue_depth' => $depth, 'failures_this_hour' => $failuresThisHour],
+            $depth > 1000 || $failuresThisHour > 50 ? 503 : 200,
         );
     }
 }
 ```
 
-```php
-// Structured log on every failure, for alerting rules:
-Queue::failing(fn (JobFailed $e) => Log::error('queue.job_failed', [
-    'job' => $e->job->resolveName(),
-    'queue' => $e->job->getQueue(),
-]));
-```
+Threshold on a rate, not on `FailedJobProviderInterface::count()`. That count is every failure ever recorded in `failed_jobs`, so once the table has accumulated enough history the endpoint reports 503 forever and the signal is gone.
 
 Laravel Pulse and Horizon both cover this; the point is that something alerts, not which tool does it.
 
@@ -1103,6 +1221,52 @@ Add a dedicated queue for anything with a distinct rate limit — a per-vendor w
 
 ---
 
+## Set the SQS Visibility Timeout on the Queue, Not in config/queue.php
+
+On `redis`, `database` and `beanstalkd`, `retry_after` decides when a reserved job is considered dead. SQS has no such key: the lease is the queue's **Default Visibility Timeout**, held in AWS. Adding `retry_after` to the `sqs` connection changes nothing, and the config file then reads as if the problem were handled.
+
+The default visibility timeout is 30 seconds. Any job that runs longer is redelivered while the first copy is still working.
+
+**Incorrect (a setting SQS never reads, next to a job that outlives the lease):**
+
+```php
+// config/queue.php
+'sqs' => [
+    'driver' => 'sqs',
+    'queue' => env('SQS_QUEUE', 'default'),
+    'retry_after' => 300,   // ignored — SQS does not use this
+],
+```
+
+```php
+final class GenerateMonthlyStatements implements ShouldQueue
+{
+    public int $timeout = 240;   // redelivered at 30s, four more times before it finishes
+}
+```
+
+**Correct (the lease lives with the queue, and the job declares its own ceiling):**
+
+```bash
+aws sqs set-queue-attributes \
+  --queue-url "$SQS_REPORTS_URL" \
+  --attributes VisibilityTimeout=600
+```
+
+```php
+final class GenerateMonthlyStatements implements ShouldQueue
+{
+    public int $timeout = 240;                 // well inside the 600s lease
+    public string $connection = 'sqs-reports';
+}
+```
+
+One queue per timeout class, exactly as with `retry_after`: a 600-second lease on the queue carrying password-reset emails means a genuinely stuck job blocks that message for ten minutes.
+
+SQS also caps a message at 12 hours of total visibility extension and 14 days of retention — work that outlives either belongs in a chunked, resumable job. The general rule is `rules/job-retry-after-exceeds-timeout.md`; this is what it means on SQS.
+
+---
+
 # 4. Caching
 
 **Impact: HIGH**
@@ -1153,7 +1317,8 @@ final class Setting extends Model {}
 
 Two cautions:
 
-- Bulk `update()` and `upsert()` do **not** fire observers — invalidate explicitly after them (see the `laravel-eloquent` skill).
+- Bulk `update()`, `upsert()`, raw SQL and anything writing the table from outside the application do **not** fire observers — invalidate explicitly after them (see the `laravel-eloquent` skill).
+- `saved` fires inside the transaction, so a rollback leaves the cache already cleared. That is the safe direction — a cold cache, not a stale one — but it means the next read pays for a rebuild that did not need to happen. Where that read is expensive, forget the key in `DB::afterCommit()` instead.
 - For data owned by another domain, listen to that domain's event rather than observing its model.
 
 ---
@@ -1177,7 +1342,8 @@ public function statsFor(int $merchantId, DateRange $period): OrderStats
 {
     $key = $this->key($merchantId, $period);
 
-    if ($cached = Cache::get($key)) {
+    // Explicit null test — 0, '' and false are cached values, not misses.
+    if (($cached = Cache::get($key)) !== null) {
         return $cached;
     }
 
@@ -1235,7 +1401,9 @@ public function permissions(): Collection
 }
 ```
 
-`Cache::memo()` is a decorator, not a store: it still reads through to Redis once, and `put()` or `forget()` through it invalidates the in-memory copy. Available in Laravel 13 and recent 12.x releases — check your version before relying on it. Use `once()` when the value is derived rather than cached.
+`Cache::memo()` is a decorator, not a store: it still reads through to Redis once, and `put()` or `forget()` through it invalidates the in-memory copy. Laravel 12.9+.
+
+Both are scoped to a lifetime, and the lifetime is longer than you think under Octane, Swoole or a long-lived worker: `once()` lives as long as the object, so a singleton keeps its first answer for the life of the process, and a `memo()` store must be flushed between requests. Reach for either only when the value genuinely cannot change within that window, and never for anything tenant-scoped on a shared instance.
 
 ---
 
@@ -1322,7 +1490,7 @@ Bumping `v2` to `v3` invalidates every entry for that computation — the cheape
 
 When one write invalidates many derived entries — a merchant's dashboard, its filtered lists, its export summaries — enumerating the keys is impossible because the filter combinations are unbounded. Tags let you flush the group.
 
-Tags require a store that supports them: Redis, Memcached or DynamoDB. The `file` and `database` stores do not.
+Tags require a store that supports them: Redis, Memcached or `array`. The `file`, `database` and `dynamodb` stores do not — `Cache::tags()` throws `BadMethodCallException` on those.
 
 **Incorrect (guessing at the key list, and missing most of it):**
 

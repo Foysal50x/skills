@@ -11,7 +11,7 @@ metadata:
 
 # Laravel HTTP
 
-Rules for the edge of a Laravel application, inbound and outbound: 35 rules across 7 sections.
+Rules for the edge of a Laravel application, inbound and outbound: 37 rules across 7 sections.
 
 The edge has one job — translate HTTP into domain types and back. `Illuminate\Http\Request` stops at the controller or Form Request; nothing inward ever sees it. See the `laravel-patterns` skill for what happens after that.
 
@@ -44,6 +44,8 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 | A function taking a password, token or key | `error-sensitive-parameter-attribute` |
 | A route file entry | `route-model-binding-over-manual-lookup`, `route-cacheable-controller-routes` |
 | A call to a third-party API | `client-explicit-timeouts`, `client-handle-status-explicitly` |
+| A URL that came from a request | `client-reject-user-supplied-urls` |
+| A POST a client may retry | `controller-idempotency-key-on-unsafe-writes` |
 | A call that fails intermittently | `client-retry-with-backoff` |
 | Several independent API calls | `client-pool-concurrent-requests` |
 
@@ -93,7 +95,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - `route-consistent-prefixes-no-double-nesting` — Keep prefixes and paths consistent
 - `route-shallow-nesting` — Nest only as deep as the parent is needed
 - `route-missing-callback` — Handle a missing bound model deliberately
-- `route-cacheable-controller-routes` — Point every route at a controller class
+- `route-cacheable-controller-routes` — No closure routes, so `route:cache` works
 
 ### 4. API Serialization (HIGH)
 
@@ -117,6 +119,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - `controller-invokable-single-action` — Prefer single-action invokable controllers
 - `controller-no-query-construction` — A controller constructs no queries
 - `controller-attributes-for-middleware-and-authorization` — `#[Middleware]` / `#[Authorize]` (Laravel 13)
+- `controller-idempotency-key-on-unsafe-writes` — A client retry must not create a second record
 
 ### 7. Outbound HTTP (MEDIUM-HIGH)
 
@@ -124,6 +127,7 @@ The edge has one job — translate HTTP into domain types and back. `Illuminate\
 - `client-retry-with-backoff` — Retry transient failures only, with increasing delays
 - `client-handle-status-explicitly` — Throw, or handle the status; never parse an error body
 - `client-pool-concurrent-requests` — Pool independent calls instead of waiting three times
+- `client-reject-user-supplied-urls` — Never fetch an address the client chose
 
 ## Version Notes
 

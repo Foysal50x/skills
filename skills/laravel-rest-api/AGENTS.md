@@ -492,11 +492,11 @@ Route model binding removes lookup boilerplate — and scoped binding turns a ne
 
 ---
 
-## Point Every Route at a Controller Class
+## Keep Every Route Free of Closures
 
 `php artisan route:cache` cannot serialize closures. One closure route anywhere in `routes/` makes the command fail, and the usual response is to drop route caching from the deploy — losing it for the whole application.
 
-Every route resolves to a controller class, including health checks and redirects.
+The action is a controller class. Where the framework already gives a closure-free shorthand — `Route::redirect()`, `Route::view()`, `Route::permanentRedirect()` — use that instead of writing a controller for it.
 
 **Incorrect:**
 
@@ -820,7 +820,7 @@ public function toArray(Request $request): array
 **Correct (Laravel 13):**
 
 ```php
-use Illuminate\Http\Resources\Json\JsonApiResource;
+use Illuminate\Http\Resources\JsonApi\JsonApiResource;
 
 final class OrderResource extends JsonApiResource
 {
@@ -1266,6 +1266,45 @@ Attributes complement Form Request `authorize()`; they do not replace it. Use wh
 
 ---
 
+## Honour an Idempotency Key on Retryable Writes
+
+A client that times out waiting for `POST /orders` does not know whether the order exists. Its choices are to retry and risk a duplicate, or give up and risk losing the order. Neither is acceptable, and the client cannot fix it alone — the guarantee has to come from the endpoint.
+
+Accept an `Idempotency-Key` header on every unsafe write that a client may reasonably retry, and return the original response for a repeat of the same key.
+
+**Incorrect (the retry creates a second order and charges twice):**
+
+```php
+public function __invoke(StoreOrderRequest $request): OrderResource
+{
+    return OrderResource::make($this->placeOrder->handle($request->toDto()));
+}
+```
+
+**Correct (the key decides, and the second call replays the first result):**
+
+```php
+public function __invoke(StoreOrderRequest $request): OrderResource
+{
+    $key = $request->header('Idempotency-Key');
+
+    if ($key === null) {
+        throw MissingIdempotencyKey::onOrderCreation();   // 400, not a silent duplicate
+    }
+
+    return OrderResource::make(
+        $this->idempotent->once("orders:{$request->user()->id}:{$key}", fn (): Order =>
+            $this->placeOrder->handle($request->toDto())),
+    );
+}
+```
+
+The store behind `once()` needs a unique index on the key and must record the result, not just the fact — otherwise the retry gets a `204` where the first call got the order. Scope the key to the authenticated user so one tenant cannot replay another's, and expire records after a window the client will not exceed (24 hours is usual).
+
+A key reused with a *different* body is a client bug, and the honest answer is `409`, not a second order. The queued half of the same problem is `laravel-async`'s idempotent-handler rule.
+
+---
+
 ## Prefer Single-Action Invokable Controllers
 
 A resource controller with seven methods accumulates shared constructor dependencies that most methods do not use, and shared middleware that most methods do not need. An invokable controller per route keeps each endpoint's dependencies exact.
@@ -1536,6 +1575,54 @@ return new CustomerOverview(
 ```
 
 Pooled requests do not inherit a macro's configuration, so set the timeout and auth on each one. Each response still needs its own status decision — a pool that silently returns three error bodies is worse than three sequential calls that threw. If the caller does not need the result immediately, a queued job beats a pool.
+
+---
+
+## Never Fetch a URL the Client Chose
+
+A webhook target, an "import from URL" field, an avatar the API fetches on the user's behalf — each hands an attacker your server's network position. `http://169.254.169.254/` reads cloud credentials; `http://localhost:9200/` reads the search index; a redirect turns a URL that validated cleanly into one that did not.
+
+`url` validation does not help: the address is well-formed, it is simply not yours to reach.
+
+**Incorrect (validated, and still a request into the private network):**
+
+```php
+$data = $request->validate(['source' => ['required', 'url']]);
+
+$body = Http::timeout(5)->get($data['source'])->body();   // 169.254.169.254 passes 'url'
+```
+
+**Correct (the client names a destination, the server decides the address):**
+
+```php
+final class ImportSourceUrl
+{
+    private const ALLOWED_HOSTS = ['exports.partner.test', 'cdn.partner.test'];
+
+    public static function from(string $candidate): self
+    {
+        $parts = parse_url($candidate);
+
+        if (($parts['scheme'] ?? null) !== 'https' || ! in_array($parts['host'] ?? '', self::ALLOWED_HOSTS, true)) {
+            throw ImportRejected::untrustedSource($candidate);
+        }
+
+        return new self($candidate);
+    }
+}
+```
+
+```php
+$body = Http::timeout(5)
+    ->withoutRedirecting()     // a 302 must not move the request off the allowlist
+    ->get(ImportSourceUrl::from($data['source'])->value)
+    ->throw()
+    ->body();
+```
+
+An allowlist of hosts beats a denylist of addresses — private ranges are larger than the list you will write, and DNS can point a permitted name at one of them. Where the destination is genuinely open-ended, resolve the host yourself, reject private and link-local addresses, and send the request through an egress proxy that enforces the same rule.
+
+Outbound calls still need `rules/client-explicit-timeouts.md` and `rules/client-handle-status-explicitly.md`.
 
 ---
 

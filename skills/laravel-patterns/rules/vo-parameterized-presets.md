@@ -33,11 +33,12 @@ final readonly class LastNMonths implements DateRangable
         }
     }
 
+    /** N calendar months ending with the current one — LastNMonths(3) in August is June–August. */
     public function range(): DateRange
     {
         $now = CarbonImmutable::now();
 
-        return new DateRange($now->subMonths($this->n)->startOfMonth(), $now->endOfMonth());
+        return new DateRange($now->subMonths($this->n - 1)->startOfMonth(), $now->endOfMonth());
     }
 }
 

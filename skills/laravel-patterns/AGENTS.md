@@ -785,9 +785,9 @@ final readonly class UsageCalculatorService
 
 ## A Service Serves Two or More Actions
 
-A Service is mandatory when the business logic is invoked by two or more Actions, or when it is complex enough that isolating it materially improves testability. Those are the only two triggers.
+Reuse is the default trigger: business logic invoked by two or more Actions belongs in a Service. The one exception is logic complex enough that testing it through its single caller hides the cases that matter — a pricing engine, a proration rule, a state machine.
 
-It is forbidden when the logic is used in exactly one Action.
+With one caller and no such complexity, a Service is forbidden. "It might be reused later" is not the exception; name the cases you cannot reach through the Action, or leave it inline.
 
 **Incorrect (single caller wrapped for symmetry):**
 
@@ -818,7 +818,7 @@ final readonly class UsageCalculatorService
 }
 ```
 
-Counting callers is the test. If there is one, keep it in the Action — see `rules/action-keep-single-use-logic-inline.md`.
+Count callers first. If there is one, keep it in the Action unless you can name the tests the extraction unlocks — see `rules/action-keep-single-use-logic-inline.md` and `rules/gate-service-only-when-reused.md`.
 
 ---
 
@@ -1958,11 +1958,12 @@ final readonly class LastNMonths implements DateRangable
         }
     }
 
+    /** N calendar months ending with the current one — LastNMonths(3) in August is June–August. */
     public function range(): DateRange
     {
         $now = CarbonImmutable::now();
 
-        return new DateRange($now->subMonths($this->n)->startOfMonth(), $now->endOfMonth());
+        return new DateRange($now->subMonths($this->n - 1)->startOfMonth(), $now->endOfMonth());
     }
 }
 
@@ -2303,17 +2304,23 @@ final readonly class OpenAiProvider implements AiProviderInterface
 {
     public function complete(PromptContext $context): Completion
     {
-        $response = $this->http->post('/v1/chat/completions', $this->toPayload($context))->json();
+        $response = $this->http
+            ->timeout(20)
+            ->post('/v1/chat/completions', $this->toPayload($context));
+
+        if ($response->failed()) {
+            throw AiProviderUnavailable::from($response->status());   // domain exception
+        }
 
         return new Completion(
-            content: $response['choices'][0]['message']['content'],
-            tokens: $response['usage']['total_tokens'],
+            content: $response->json('choices.0.message.content'),
+            tokens: $response->json('usage.total_tokens'),
         );
     }
 }
 ```
 
-The domain now depends on `Completion`. Swapping providers, or absorbing a breaking upstream change, edits one class.
+The domain now depends on `Completion`. Swapping providers, or absorbing a breaking upstream change, edits one class. The translation is not only of the happy path: the adapter is also where the upstream's timeouts and status codes become the domain's own exception type, so no `RequestException` reaches a use case.
 
 ---
 
@@ -2414,8 +2421,13 @@ final readonly class RecordOrderUsage implements ShouldQueue
 Enforce in CI:
 
 ```bash
-grep -rn 'use App\\Domain\\\([A-Za-z]*\)\\\(Models\|Repositories\|Queries\)' app/Domain \
-  | awk -F'app/Domain/' '{split($2,p,"/"); split($0,u,"App\\\\Domain\\\\"); if (p[1] != substr(u[2],1,index(u[2],"\\\\")-1)) print}'
+# Flags any file under app/Domain/<X>/ importing another domain's Models, Repositories or Queries.
+grep -rn --include='*.php' -E 'use App\\Domain\\[A-Za-z]+\\(Models|Repositories|Queries)\\' app/Domain \
+  | awk -F: '{
+      match($1, /app\/Domain\/[A-Za-z]+/); here = substr($1, RSTART + 11, RLENGTH - 11)
+      match($0, /App\\Domain\\[A-Za-z]+/);  used = substr($0, RSTART + 11, RLENGTH - 11)
+      if (here != used) { print; bad = 1 }
+    } END { exit bad }'
 ```
 
 ---

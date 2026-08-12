@@ -47,5 +47,6 @@ final class Setting extends Model {}
 
 Two cautions:
 
-- Bulk `update()` and `upsert()` do **not** fire observers — invalidate explicitly after them (see the `laravel-eloquent` skill).
+- Bulk `update()`, `upsert()`, raw SQL and anything writing the table from outside the application do **not** fire observers — invalidate explicitly after them (see the `laravel-eloquent` skill).
+- `saved` fires inside the transaction, so a rollback leaves the cache already cleared. That is the safe direction — a cold cache, not a stale one — but it means the next read pays for a rebuild that did not need to happen. Where that read is expensive, forget the key in `DB::afterCommit()` instead.
 - For data owned by another domain, listen to that domain's event rather than observing its model.

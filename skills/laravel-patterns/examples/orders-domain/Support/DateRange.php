@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Filters\Date;
 
 use Carbon\CarbonImmutable;
+use InvalidArgumentException;
 
 /**
  * PURE value object: data plus pure predicates and transformations.
@@ -15,7 +16,11 @@ final readonly class DateRange
     public function __construct(
         public ?CarbonImmutable $from = null,
         public ?CarbonImmutable $to = null,
-    ) {}
+    ) {
+        if ($from !== null && $to !== null && $from->greaterThan($to)) {
+            throw new InvalidArgumentException('DateRange requires from <= to.');
+        }
+    }
 
     public function isBounded(): bool
     {

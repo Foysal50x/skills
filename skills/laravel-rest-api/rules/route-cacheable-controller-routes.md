@@ -1,15 +1,15 @@
 ---
-title: Point Every Route at a Controller Class
+title: Keep Every Route Free of Closures
 impact: MEDIUM
 impactDescription: route:cache fails outright on a single closure route
 tags: routing, performance, deployment, caching
 ---
 
-## Point Every Route at a Controller Class
+## Keep Every Route Free of Closures
 
 `php artisan route:cache` cannot serialize closures. One closure route anywhere in `routes/` makes the command fail, and the usual response is to drop route caching from the deploy — losing it for the whole application.
 
-Every route resolves to a controller class, including health checks and redirects.
+The action is a controller class. Where the framework already gives a closure-free shorthand — `Route::redirect()`, `Route::view()`, `Route::permanentRedirect()` — use that instead of writing a controller for it.
 
 **Incorrect:**
 

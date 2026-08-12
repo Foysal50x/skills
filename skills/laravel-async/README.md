@@ -2,7 +2,7 @@
 
 Work outside the request: idempotent jobs, domain events, queue operations, caching and invalidation, and scheduling.
 
-33 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+36 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 

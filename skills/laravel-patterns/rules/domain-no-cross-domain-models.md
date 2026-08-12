@@ -53,6 +53,11 @@ final readonly class RecordOrderUsage implements ShouldQueue
 Enforce in CI:
 
 ```bash
-grep -rn 'use App\\Domain\\\([A-Za-z]*\)\\\(Models\|Repositories\|Queries\)' app/Domain \
-  | awk -F'app/Domain/' '{split($2,p,"/"); split($0,u,"App\\\\Domain\\\\"); if (p[1] != substr(u[2],1,index(u[2],"\\\\")-1)) print}'
+# Flags any file under app/Domain/<X>/ importing another domain's Models, Repositories or Queries.
+grep -rn --include='*.php' -E 'use App\\Domain\\[A-Za-z]+\\(Models|Repositories|Queries)\\' app/Domain \
+  | awk -F: '{
+      match($1, /app\/Domain\/[A-Za-z]+/); here = substr($1, RSTART + 11, RLENGTH - 11)
+      match($0, /App\\Domain\\[A-Za-z]+/);  used = substr($0, RSTART + 11, RLENGTH - 11)
+      if (here != used) { print; bad = 1 }
+    } END { exit bad }'
 ```

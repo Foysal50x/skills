@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Async
 
-Rules for work that happens outside the request: 33 rules across 5 sections.
+Rules for work that happens outside the request: 36 rules across 5 sections.
 
 Two assumptions run through all of them:
 
@@ -76,6 +76,7 @@ Two assumptions run through all of them:
 - `job-unique-jobs` — Collapse duplicate dispatches with `ShouldBeUnique`
 - `job-batches-and-chains` — Batches for fan-out, chains for ordered steps
 - `job-handle-failure-explicitly` — Decide what happens after the last attempt
+- `job-fail-fast-on-permanent-errors` — Stop retrying what cannot succeed
 
 ### 2. Domain Events (HIGH)
 
@@ -86,6 +87,7 @@ Two assumptions run through all of them:
 - `event-queue-side-effecting-listeners` — Side-effecting listeners are queued
 - `event-dispatch-after-commit` — Dispatch after the transaction commits
 - `event-queue-notifications-and-mailables` — Queue them, and send after commit
+- `event-outbox-for-must-deliver` — Commit the intent with the data when loss is unacceptable
 
 ### 3. Queue Operations (HIGH)
 
@@ -94,6 +96,7 @@ Two assumptions run through all of them:
 - `queue-never-sync-in-production` — `sync` is for tests only
 - `queue-restart-workers-on-deploy` — Workers keep old code until restarted
 - `queue-monitor-depth-and-failures` — Depth, wait time and failure rate
+- `queue-sqs-visibility-timeout` — On SQS the lease lives in AWS, not in config
 
 ### 4. Caching (HIGH)
 
@@ -127,10 +130,11 @@ Two assumptions run through all of them:
 | Feature | Requires |
 |---------|----------|
 | `ShouldBeUnique`, `Cache::lock()`, `withoutOverlapping()`, `onOneServer()` | An atomic cache store — Redis, Memcached, DynamoDB or database. Not `file` or `array`. |
-| `Cache::tags()` | Redis, Memcached or DynamoDB. Not `file` or `database`. |
+| `Cache::tags()` | Redis, Memcached or `array`. Not `file`, `database` or `dynamodb`. |
 | `Bus::batch()` | The `job_batches` table |
 | Failed-job retention | The `failed_jobs` table |
-| `Cache::memo()`, `failover` cache driver | Laravel 13, and recent 12.x releases — check your version |
+| `Cache::memo()` | Laravel 12.9+ |
+| `failover` cache driver | Laravel 12.35+ |
 
 ## Reference Material
 

@@ -54,3 +54,5 @@ DB::transaction(function () use ($data): void {
 `after_commit` covers queued jobs, queued event listeners, mailables, notifications and broadcast events, and a rollback discards everything dispatched inside the transaction. It does not defer synchronous listeners — one more reason side-effecting listeners are queued. With it on globally, a dispatch that genuinely must not wait opts out with `->beforeCommit()`.
 
 Per-event rather than per-connection, an event class may implement `Illuminate\Contracts\Events\ShouldDispatchAfterCommit` — the same guarantee, declared where the event is defined. Notifications and mailables use `afterCommit()`; see `rules/event-queue-notifications-and-mailables.md`.
+
+What this does **not** buy is delivery. `afterCommit` only orders the queue write after the commit; if the process dies in that gap the row is committed and the job never existed. Where a lost side effect is unacceptable — a payment capture, a partner notification — write the intent into an outbox table inside the same transaction and let a worker publish it.

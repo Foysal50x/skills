@@ -2,7 +2,7 @@
 
 The HTTP edge: authorization, Form Requests and DTOs, scoped route model binding, API Resources, and exception-to-status mapping.
 
-35 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
+37 rules. Baseline: Laravel `^12.0 || ^13.0`, PHP `^8.3`.
 
 ## Install
 

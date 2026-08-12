@@ -10,7 +10,7 @@ Placement rules for domain-driven Laravel applications — when to create an Act
 
 **Impact: CRITICAL**
 
-Run before creating any class. Answer the gate questions in order and stop at the first match. Skipping the gate is how a codebase grows a Repository for every model or scatters queries across Actions.
+Run before creating any class. Answer the gate questions in order and stop at the first match. The gate also decides whether an interface, factory, registry or base class has earned a concrete extension seam. Skipping the gate is how a codebase grows a Repository for every model or scatters queries across Actions.
 
 ---
 
@@ -69,6 +69,61 @@ See `rules/action-naming-verb-noun.md` for naming.
 
 ---
 
+## Earn an Extension Seam Before Adding Abstractions
+
+Add an interface, factory, registry or base class only when there are two real implementations, a concrete backend swap, or a host-owned extension point. Keep the contract as small as the caller needs, and share only the mechanism that is genuinely invariant; SOLID is a design check, not a reason to create layers pre-emptively.
+
+**Incorrect (speculative framework around one implementation):**
+
+```php
+interface PaymentProviderInterface
+{
+    public function create(array $data): mixed;
+    public function update(array $data): mixed;
+}
+
+abstract class AbstractPaymentProvider implements PaymentProviderInterface
+{
+    // Hooks for providers that may exist later.
+}
+
+final class PaymentFactory
+{
+    public function provider(string $name): PaymentProviderInterface
+    {
+        return new StripePaymentProvider; // the registry is not real
+    }
+}
+```
+
+**Correct (real providers share a narrow published contract):**
+
+```php
+interface ExchangeClient
+{
+    /** @return Collection<int, CurrencyRate> */
+    public function latest(?string $currencies = null, string $base = 'USD'): Collection;
+}
+
+final readonly class ExchangeFactory
+{
+    /** @param array<string, callable(): ExchangeClient> $clients */
+    public function __construct(private array $clients) {}
+
+    public function client(string $key): ExchangeClient
+    {
+        $factory = $this->clients[$key]
+            ?? throw new InvalidArgumentException("Exchange client [{$key}] is not configured.");
+
+        return $factory();
+    }
+}
+```
+
+The map holds closures, so only the selected client is built and only its credentials are read, and an unknown key fails loudly at the seam. Extract a shared base only once duplicated mechanism actually appears. See `rules/gate-opt-in-capability-contract.md` for behavior only some implementations need, and `rules/config-select-deployable-variation.md` for choosing the key.
+
+---
+
 ## Use Eloquent Directly by Default
 
 Q4 of the Decision Gate, and the default answer whenever Q4 and Q5 feel ambiguous. Eloquent is already a good abstraction. Simple CRUD, a single `where()->get()` used in one place, `Model::find()`, `$model->update()` — these need no Repository, no Query Class and no interface.
@@ -113,6 +168,83 @@ final readonly class ArchiveConversationAction
 ```
 
 "Maybe someday we will switch databases" is not a valid trigger. See `rules/gate-repository-earns-its-name.md` for what is.
+
+---
+
+## Make Optional Behavior an Opt-In Contract
+
+When only some implementations need an extra step, publish it as a second contract they opt into instead of widening the shared one. The base checks `instanceof` before paying for it, so a simple implementation stays one method and nobody writes a no-op override that reads like a guarantee.
+
+**Incorrect (every implementation answers a question most of them do not have):**
+
+```php
+interface IdGenerator
+{
+    public function generate(): string;
+
+    public function isUnique(string $id): bool;
+
+    public function maxAttempts(): int;
+}
+
+final class StripeStyleGenerator implements IdGenerator
+{
+    public function generate(): string
+    {
+        return 'in_'.bin2hex(random_bytes(12));
+    }
+
+    public function isUnique(string $id): bool
+    {
+        return true; // dead code shaped like a promise
+    }
+
+    public function maxAttempts(): int
+    {
+        return 1;
+    }
+}
+```
+
+**Correct (`generate()` is the whole contract; uniqueness is opted into):**
+
+```php
+interface ShouldBeUnique
+{
+    public function isUnique(string $id): bool;
+}
+```
+
+```php
+abstract class TokenizedIdGenerator implements IdGenerator
+{
+    public function generate(): string
+    {
+        if (! $this instanceof ShouldBeUnique) {
+            return $this->render();
+        }
+
+        for ($attempt = 0; $attempt < $this->maxGenerationAttempts(); $attempt++) {
+            $id = $this->render();
+
+            if ($this->isUnique($id)) {
+                return $id;
+            }
+        }
+
+        throw new UniqueIdGenerationException(static::class);
+    }
+
+    abstract protected function render(): string;
+
+    protected function maxGenerationAttempts(): int
+    {
+        return 10;
+    }
+}
+```
+
+Bound the retry and throw a named exception — an exhausted budget means the format is too narrow, not that the caller should retry. The pre-check only narrows the collision window; the database unique constraint stays the guarantee under concurrency. See `rules/gate-earn-extension-seam.md` before publishing either contract.
 
 ---
 
@@ -332,7 +464,7 @@ interface ChatRepositoryInterface
 UsageRecord::create(['tenant_id' => $tenant->id, 'tokens' => $tokens]);
 ```
 
-See `rules/gate-eloquent-directly-by-default.md` for the default branch.
+See `rules/gate-eloquent-directly-by-default.md` for the default branch, and `rules/gate-earn-extension-seam.md` before any interface, factory or base class.
 
 ---
 
@@ -2757,5 +2889,63 @@ CHAT_VECTOR_SEARCH=true
 Cast in the config file, not at the call site — `config('chat.vector_search')` should already be a bool.
 
 A secret read from config still leaks the moment it becomes a function argument: PHP writes every argument into stack traces. Mark those parameters `#[\SensitiveParameter]` — see the `laravel-rest-api` skill's `error-sensitive-parameter-attribute` rule — and never pass one into a queued job's constructor.
+
+---
+
+## Use Configuration for Deployable Variation
+
+Put deploy-time choices in `config/*.php`: provider keys, generator classes, formats, endpoints and feature switches. Keep request-time or business decisions as explicit inputs, and resolve configured implementations at the composition boundary through a contract or an injected registry; do not scatter `env()`, environment branches or `new` conditionals through Actions and domain code.
+
+**Incorrect (the workflow owns deployment choices):**
+
+```php
+final readonly class RecordPaymentAction
+{
+    public function handle(PaymentData $data): Payment
+    {
+        $gateway = app()->environment('production')
+            ? new StripeGateway(env('STRIPE_KEY'))
+            : new FakeGateway;
+
+        return $gateway->charge($data);
+    }
+}
+```
+
+**Correct (config selects the implementation; the Action sees a contract):**
+
+```php
+// config/payments.php
+return [
+    'gateway' => env('PAYMENT_GATEWAY', 'stripe'),
+    'providers' => [
+        'stripe' => ['class' => StripeGateway::class, 'key' => env('STRIPE_KEY')],
+        'fake' => ['class' => FakeGateway::class],
+    ],
+];
+```
+
+```php
+// DomainServiceProvider::register()
+$this->app->bind(PaymentGateway::class, function ($app): PaymentGateway {
+    $provider = config('payments.providers.'.config('payments.gateway'));
+
+    return $app->make($provider['class']);
+});
+```
+
+```php
+final readonly class RecordPaymentAction
+{
+    public function __construct(private PaymentGateway $gateway) {}
+
+    public function handle(PaymentData $data): Payment
+    {
+        return $this->gateway->charge($data);
+    }
+}
+```
+
+Secrets stay in `.env`, read only from `config/` — `rules/config-never-env-outside-config.md`. Validate configured keys and credentials at boot. A configured class name is a seam only when the contract is real: run `rules/gate-earn-extension-seam.md` first, and do not turn every constant into configuration.
 
 ---

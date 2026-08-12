@@ -20,6 +20,14 @@ Run this before creating any Service, Repository, Query Class or Value Object, a
 | Q4 | Is it single-record work — `find()`, a route-bound model, `create()`, `$model->update()`, `delete()`? | **Eloquent directly**, from an Action or a Repository. No interface. |
 | Q5 | Is it either (a) likely to switch backends, or (b) named / important / reused / complex enough to deserve its own name and dedicated tests? | **Repository** — interface in `Contracts/`, implementation in `Repositories/`, complex queries delegated to `Queries/`. |
 
+## Abstraction
+
+| # | Question | If yes |
+|---|----------|--------|
+| Q6 | Are there two real implementations today, a concrete backend swap, or a host-owned extension point? | **Interface** — the narrowest contract the caller needs. Otherwise one concrete class. |
+| Q7 | Do callers pick between those implementations by a key from config or a request? | **Factory or registry** — a map of key → closure building the client, throwing on an unknown key. |
+| Q8 | Does only a subset of implementations need an extra step (uniqueness check, retry, cache warm)? | **A second opt-in contract** the base checks with `instanceof`. Never widen the shared interface. |
+
 ## Hard rules
 
 - If Q4 and Q5 feel ambiguous, choose **Q4**. "Maybe someday" is not a trigger.
@@ -29,6 +37,8 @@ Run this before creating any Service, Repository, Query Class or Value Object, a
 - An interface without an implementation and a container binding is not shippable. All three land together.
 - The trigger for a Query Class and a Repository is the same. Never create a Query Class without a Repository around it; never create a Repository whose methods never delegate to one.
 - Both extremes are bugs: a Repository for every model, and no repositories at all.
+- An abstract base class is earned by shared *mechanism*, not by symmetry. Two implementations that share no code get an interface and nothing else.
+- A configured class name is an extension seam only when Q6 already passed. Config chooses between real implementations; it does not create the contract.
 
 ## Layer one-liners
 

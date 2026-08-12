@@ -8,7 +8,7 @@ The section ID (in parentheses) is the filename prefix used to group rules.
 ## 1. The Decision Gate (gate)
 
 **Impact:** CRITICAL
-**Description:** Run before creating any class. Answer the gate questions in order and stop at the first match. Skipping the gate is how a codebase grows a Repository for every model or scatters queries across Actions.
+**Description:** Run before creating any class. Answer the gate questions in order and stop at the first match. The gate also decides whether an interface, factory, registry or base class has earned a concrete extension seam. Skipping the gate is how a codebase grows a Repository for every model or scatters queries across Actions.
 
 ## 2. Actions (action)
 

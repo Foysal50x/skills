@@ -64,4 +64,4 @@ interface ChatRepositoryInterface
 UsageRecord::create(['tenant_id' => $tenant->id, 'tokens' => $tokens]);
 ```
 
-See `rules/gate-eloquent-directly-by-default.md` for the default branch.
+See `rules/gate-eloquent-directly-by-default.md` for the default branch, and `rules/gate-earn-extension-seam.md` before any interface, factory or base class.

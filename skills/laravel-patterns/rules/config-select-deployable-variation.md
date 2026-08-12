@@ -33,18 +33,24 @@ return [
     'gateway' => env('PAYMENT_GATEWAY', 'stripe'),
     'providers' => [
         'stripe' => ['class' => StripeGateway::class, 'key' => env('STRIPE_KEY')],
-        'fake' => ['class' => FakeGateway::class],
+        'fake' => ['class' => FakeGateway::class, 'key' => 'fake'],
     ],
 ];
 ```
 
 ```php
-// DomainServiceProvider::register()
-$this->app->bind(PaymentGateway::class, function ($app): PaymentGateway {
-    $provider = config('payments.providers.'.config('payments.gateway'));
+// DomainServiceProvider::register() — a bad key fails at boot, not mid-charge
+$name = (string) config('payments.gateway');
+$provider = config("payments.providers.{$name}") ?? throw new InvalidArgumentException(
+    "Payment gateway [{$name}] is not configured."
+);
+$key = $provider['key'] ?? throw new InvalidArgumentException(
+    "Payment gateway [{$name}] has no credential."
+);
 
-    return $app->make($provider['class']);
-});
+$this->app->bind(PaymentGateway::class, fn ($app): PaymentGateway => $app->make(
+    $provider['class'], ['apiKey' => $key],
+));
 ```
 
 ```php
@@ -59,4 +65,4 @@ final readonly class RecordPaymentAction
 }
 ```
 
-Secrets stay in `.env`, read only from `config/` — `rules/config-never-env-outside-config.md`. Validate configured keys and credentials at boot. A configured class name is a seam only when the contract is real: run `rules/gate-earn-extension-seam.md` first, and do not turn every constant into configuration.
+Secrets stay in `.env`, read only from `config/` — `rules/config-never-env-outside-config.md`. A configured class name is a seam only when the contract is real: run `rules/gate-earn-extension-seam.md` first, and do not turn every constant into configuration.

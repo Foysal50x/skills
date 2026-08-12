@@ -49,8 +49,10 @@ Q4. Single-record CRUD (find / create /
 Q5. Backend may swap, OR the query earns a
     name and its own tests?                   → REPOSITORY (+ Query Classes)
 Q6. Two real implementations, a concrete
-    backend swap, or a host extension point?  → INTERFACE / FACTORY
+    backend swap, or a host extension point?  → INTERFACE
                                                 (otherwise one concrete class)
+Q7. Callers pick one by a config or
+    request key?                              → FACTORY / REGISTRY
 ```
 
 Ambiguous between Q4 and Q5? Choose Q4 — except for a list endpoint, which is always Q5.

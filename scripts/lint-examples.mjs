@@ -117,12 +117,40 @@ function transactionRanges(lines) {
  * so every entry here was a real defect found by hand — this list is how it stays fixed.
  */
 const BANNED_SYMBOLS = [
-  ['Illuminate\\Http\\Resources\\Json\\JsonApiResource', 'JSON:API resources live in Illuminate\\Http\\Resources\\JsonApi'],
-  ['Tpetry\\QueryExpressions\\Language\\Value', 'tpetry Value lives in Tpetry\\QueryExpressions\\Value'],
+  ['Illuminate\\Http\\Resources\\Json\\JsonApiResource', 'use Illuminate\\Http\\Resources\\JsonApi\\JsonApiResource'],
+  ['Tpetry\\QueryExpressions\\Language\\Value', 'use Tpetry\\QueryExpressions\\Value\\Value'],
   ['AvgFilter', 'tpetry ships no filtered average — only Count and Sum have a …Filter variant'],
   ['MinFilter', 'tpetry ships no filtered minimum — only Count and Sum have a …Filter variant'],
   ['MaxFilter', 'tpetry ships no filtered maximum — only Count and Sum have a …Filter variant'],
 ]
+
+/**
+ * `use A\B\{C, D as E};` never contains the substring `A\B\C`, so a grouped import
+ * hides a banned symbol from a plain text search — and the packages these rules cite
+ * write their own README examples that way. Expand the group before matching.
+ * Handles the multi-line form too, and reports the line the member sits on.
+ */
+const GROUPED_IMPORT = /use\s+((?:[A-Za-z_]\w*\\)+)\{([^}]*)\}/g
+
+function expandedImports(lines) {
+  const source = lines.join('\n')
+  const found = []
+
+  for (const match of source.matchAll(GROUPED_IMPORT)) {
+    const [whole, prefix, members] = match
+    const groupStart = source.slice(0, match.index).split('\n').length - 1
+
+    for (const member of members.split(',')) {
+      const name = member.split(/\s+as\s+/i)[0].trim()
+      if (!name) continue
+      // Offset within the group, so a ten-line grouped import still points at the right line.
+      const offsetInGroup = whole.slice(0, whole.indexOf(name)).split('\n').length - 1
+      found.push({ line: groupStart + offsetInGroup, fqn: `${prefix}${name}` })
+    }
+  }
+
+  return found
+}
 
 /**
  * Claims about infrastructure support that are wrong however confidently they are phrased.
@@ -226,9 +254,14 @@ const CHECKS = [
     doc: 'AGENTS.md: never infer an API from its name',
     allow: ['lint-examples.mjs'],
     run(block) {
-      return block.lines.flatMap((line, i) =>
-        BANNED_SYMBOLS.filter(([symbol]) => line.includes(symbol)).map(([symbol, reason]) => ({
-          line: i,
+      const sites = [
+        ...block.lines.map((line, i) => ({ line: i, text: line })),
+        ...expandedImports(block.lines).map(({ line, fqn }) => ({ line, text: fqn })),
+      ]
+
+      return sites.flatMap(({ line, text }) =>
+        BANNED_SYMBOLS.filter(([symbol]) => text.includes(symbol)).map(([symbol, reason]) => ({
+          line,
           message: `${symbol} does not exist — ${reason}`,
         })),
       )

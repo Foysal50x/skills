@@ -133,7 +133,8 @@ Two assumptions run through all of them:
 | `Cache::tags()` | Redis, Memcached or `array`. Not `file`, `database` or `dynamodb`. |
 | `Bus::batch()` | The `job_batches` table |
 | Failed-job retention | The `failed_jobs` table |
-| `Cache::memo()`, `failover` cache driver | Laravel 13, and recent 12.x releases — check your version |
+| `Cache::memo()` | Laravel 12.9+ |
+| `failover` cache driver | Laravel 12.35+ |
 
 ## Reference Material
 

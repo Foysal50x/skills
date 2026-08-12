@@ -25,8 +25,12 @@ public function handle(CrmClient $crm): void
 **Correct (permanent failures end the job on the first attempt):**
 
 ```php
+use Illuminate\Queue\InteractsWithQueue;
+
 final class SyncContactToCrm implements ShouldQueue
 {
+    use InteractsWithQueue;   // delete(), fail() and release() come from here
+
     public int $tries = 5;
 
     public function handle(ContactRepositoryInterface $contacts, CrmClient $crm): void

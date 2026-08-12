@@ -4,7 +4,7 @@ description: Test strategy for a layered Laravel application — which test styl
 license: MIT
 metadata:
   author: Foysal Ahmed
-  version: "1.1.0"
+  version: "1.1.1"
   laravel: "^12.0 || ^13.0"
   php: "^8.3"
   pest: "^3.0 || ^4.0"

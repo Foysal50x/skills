@@ -1,6 +1,6 @@
 # Laravel Skills
 
-Opinionated Laravel engineering skills for AI coding agents. 198 rules across five skills, built for domain-driven Laravel applications.
+Opinionated Laravel engineering skills for AI coding agents. 201 rules across five skills, built for domain-driven Laravel applications.
 
 Skills follow the [Agent Skills](https://agentskills.io/) format and work with Claude Code, Cursor, Copilot and anything else that reads `SKILL.md`.
 
@@ -49,7 +49,7 @@ The `laravel-` prefix stays in the directory name because two of the five — `p
 
 ### laravel-patterns
 
-Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 60 rules.
+Placement rules for domain-driven Laravel: when to create an Action, Service, Repository, Query Class or Value Object — and when to just use Eloquent. 63 rules.
 
 **Use when:**
 

@@ -11,7 +11,7 @@ metadata:
 
 # Laravel Patterns
 
-Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 60 rules across 9 sections.
+Placement rules for domain-driven Laravel applications: Action, Service, Repository, Query Class, Value Object. 63 rules across 9 sections.
 
 **Core philosophy: practicality over purity. Never take a greedy decision.**
 
@@ -48,6 +48,11 @@ Q4. Single-record CRUD (find / create /
                                                 (from an Action or Repository)
 Q5. Backend may swap, OR the query earns a
     name and its own tests?                   → REPOSITORY (+ Query Classes)
+Q6. Two real implementations, a concrete
+    backend swap, or a host extension point?  → INTERFACE
+                                                (otherwise one concrete class)
+Q7. Callers pick one by a config or
+    request key?                              → FACTORY / REGISTRY
 ```
 
 Ambiguous between Q4 and Q5? Choose Q4 — except for a list endpoint, which is always Q5.
@@ -77,6 +82,9 @@ These are the mistakes that survive review because each one looks locally reason
 | A method with more than four parameters | `vo-more-than-four-params`, `vo-group-related-parameters` |
 | Code that touches another domain | `domain-no-cross-domain-models`, `domain-events-for-reactions` |
 | A notification, report or export class | `layout-shared-module-owns-mechanism` |
+| An interface, factory, registry or base class | `gate-earn-extension-seam` |
+| Behavior only some implementations need | `gate-opt-in-capability-contract` |
+| A driver, provider or class chosen per deployment | `config-select-deployable-variation` |
 | Anything reading configuration | `config-never-env-outside-config` |
 | A sort or filter arriving as a string | `vo-named-constructor-parses-input` |
 | A file you cannot place | `layout-scope-based-co-location` |
@@ -126,6 +134,8 @@ A vertical slice lands in this order — each step exists only if the step above
 - `gate-repository-earns-its-name` — A Repository must name its trigger
 - `gate-query-class-and-repository-together` — Query Classes and Repositories arrive together
 - `gate-reads-go-through-a-named-query` — A list endpoint is a named query
+- `gate-earn-extension-seam` — Earn interfaces and factories from real variation
+- `gate-opt-in-capability-contract` — Optional behavior is a second contract, not a wider one
 
 ### 2. Actions (HIGH)
 
@@ -200,6 +210,7 @@ A vertical slice lands in this order — each step exists only if the step above
 ### 9. Configuration and Environments (MEDIUM)
 
 - `config-secrets-in-env-structure-in-config` — Secrets in `.env`, structure in `config/`
+- `config-select-deployable-variation` — Use config for deploy-time implementation choices
 - `config-never-env-outside-config` — Never call `env()` outside `config/`
 - `config-per-environment-overrides` — Override per environment, not per branch
 - `config-cache-in-production` — Cache config, routes and events in production

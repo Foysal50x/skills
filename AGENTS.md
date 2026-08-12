@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Repository Overview
 
-A collection of Laravel engineering skills for AI coding agents. Five skills, 198 rules, targeting Laravel `^12.0 || ^13.0` on PHP `^8.3`.
+A collection of Laravel engineering skills for AI coding agents. Five skills, 201 rules, targeting Laravel `^12.0 || ^13.0` on PHP `^8.3`.
 
 This repo contains **documentation, not application code**. There is no PHP to run — the PHP in rule files is illustrative.
 

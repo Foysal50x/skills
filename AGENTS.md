@@ -20,6 +20,7 @@ scripts/
   build-agents.mjs      rules/*.md + _sections.md → AGENTS.md
   validate.mjs          structural validation
   lint-examples.mjs     cross-rule validation of every Correct example
+  release.mjs           version bump → commit → tag → GitHub release
 skills/{skill-name}/         laravel-async · laravel-eloquent · laravel-patterns · laravel-rest-api · laravel-testing
   SKILL.md              index (max 500 lines)
   AGENTS.md             generated — never edit by hand
@@ -39,6 +40,7 @@ npm run build      # regenerate every skills/*/AGENTS.md
 npm run validate   # structural checks; exits non-zero on error
 npm run lint       # cross-rule checks on the code in every Correct example
 npm run check      # all three
+npm run release    # cut a release from main
 ```
 
 Always run `npm run check` before committing. CI fails if `AGENTS.md` is stale.
@@ -111,6 +113,32 @@ Sections are ordered by impact — what breaks an application first comes first.
 6. Give it a `## Pick the Rule` routing table and the shared `## Before You Write Code` block, both above `## Rule Sections by Priority`.
 6. `npm run check`
 
+## Releasing
+
+`npm run release` is the only way a version moves. It bumps every manifest, commits to `main`, tags, pushes and publishes the GitHub release.
+
+```bash
+npm run release                       # interactive; suggests the next patch
+npm run release -- --minor            # bump without being asked
+npm run release -- --version 2.0.0    # an exact version
+npm run release -- --dry-run --minor  # print every step, change nothing
+npm run release -- --notes-file notes.md   # hand-written release body
+```
+
+It writes 13 files: `package.json`, both `.claude-plugin/` manifests, and each skill's `metadata.json` (version and `date`) and `SKILL.md` frontmatter. Each is matched as an exact key, so a version string sitting in prose is never rewritten by a release.
+
+It refuses to run when any of these is true, because each one produces a release nobody can trust:
+
+- the branch is not `main`, or the working tree is dirty
+- `main` is behind `origin/main`
+- `gh` is not authenticated
+- the version is not semver, is not newer than the current one, or its tag already exists locally or on the remote
+- `npm run check` fails — the bump is left in the working tree to fix and re-run
+
+Release notes default to the commit subjects since the previous tag plus a compare link. For a release worth describing properly, write the body and pass `--notes-file`.
+
+Nothing is pushed until you confirm, and `--yes` is required to publish non-interactively. `--dry-run` prints the whole plan, including the notes, and touches nothing.
+
 ## Git
 
-Commit as the repository owner's git identity. Do not add AI co-author trailers.
+Commit as the repository owner's git identity. Do not add AI co-author trailers. `release.mjs` never sets an author, a committer or a trailer — the release commit and tag carry whatever `git config` says, and are signed if signing is on.

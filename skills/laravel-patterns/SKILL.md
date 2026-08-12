@@ -4,7 +4,7 @@ description: Placement rules for domain-driven Laravel applications — when to 
 license: MIT
 metadata:
   author: Foysal Ahmed
-  version: "1.1.1"
+  version: "1.1.2"
   laravel: "^12.0 || ^13.0"
   php: "^8.3"
 ---

@@ -160,6 +160,7 @@ rules/cache-invalidate-on-model-events.md
 
 ## Related Skills
 
+- `laravel-engineering` — trace callers and effects, preserve failures, and verify the changed path
 - `laravel-patterns` — where events, listeners and their contracts live across domains
 - `laravel-eloquent` — transactions, `after_commit` and bulk writes that skip observers
 - `laravel-rest-api` — returning 202 and a pollable resource instead of blocking

@@ -171,6 +171,7 @@ rules/tx-dispatch-after-commit.md
 
 ## Related Skills
 
+- `laravel-engineering` — trace the full change and read back through the consumer shape
 - `laravel-patterns` — where the query goes: Query Class, Repository, Action or inline
 - `laravel-rest-api` — pagination and resources at the HTTP edge
 - `laravel-async` — caching query results and invalidating on model events

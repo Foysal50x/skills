@@ -11,7 +11,7 @@
     {
       "name": "laravel-skill",
       "source": "./",
-      "description": "Laravel architecture, Eloquent, REST API, async and testing skills — Action / Service / Repository / Query Class / Value Object patterns for domain-driven Laravel apps.",
+      "description": "Laravel engineering, architecture, Eloquent, REST API, async and testing skills — context-aware implementation and domain-driven patterns for Laravel apps.",
       "version": "1.1.2",
       "author": {
         "name": "Foysal Ahmed",

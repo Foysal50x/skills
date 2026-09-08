@@ -1,6 +1,6 @@
 # Laravel Skills
 
-Opinionated Laravel engineering skills for AI coding agents. 201 rules across five skills, built for domain-driven Laravel applications.
+Opinionated Laravel engineering skills for AI coding agents. 209 rules across six skills, built for domain-driven Laravel applications.
 
 Skills follow the [Agent Skills](https://agentskills.io/) format and work with Claude Code, Cursor, Copilot and anything else that reads `SKILL.md`.
 
@@ -40,12 +40,24 @@ The directory name is the skill name, and only the Claude Code plugin adds a nam
 
 | Install | Invoked as |
 |---------|------------|
-| skills.sh, or a manual copy into `~/.claude/skills/` | `laravel-patterns`, `laravel-eloquent`, `laravel-rest-api`, `laravel-async`, `laravel-testing` |
+| skills.sh, or a manual copy into `~/.claude/skills/` | `laravel-engineering`, `laravel-patterns`, `laravel-eloquent`, `laravel-rest-api`, `laravel-async`, `laravel-testing` |
 | Claude Code plugin | `laravel-skill:laravel-patterns`, `laravel-skill:laravel-eloquent`, … |
 
-The `laravel-` prefix stays in the directory name because two of the five — `patterns` and `testing` — would otherwise be generic enough to collide with any other skill pack in `~/.claude/skills/`.
+The `laravel-` prefix stays in the directory name because `engineering`, `patterns` and `testing` would otherwise be generic enough to collide with another skill pack in `~/.claude/skills/`.
 
 ## Available Skills
+
+### laravel-engineering
+
+Cross-cutting implementation discipline: how an agent understands an unfamiliar change, reuses existing behavior, writes readable code, preserves failures and proves the critical path. 8 rules.
+
+**Use when:**
+
+- Implementing, refactoring, debugging or reviewing Laravel code
+- A change touches callers, configuration, persistence, authorization or queued effects
+- Deciding whether to extract code, how to handle a failure, or what must be verified
+
+**Covers:** local-contract reading · data and effect tracing · reuse before abstraction · direct readable code · root-cause fixes · loud failures · consumer-ready read-back · live code and documentation · critical-path verification
 
 ### laravel-patterns
 

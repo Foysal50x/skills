@@ -244,6 +244,7 @@ rules/query-internal-to-repositories.md
 
 ## Related Skills
 
+- `laravel-engineering` — context tracing, reuse discipline and critical-path verification
 - `laravel-eloquent` — what goes *inside* a Query Class: casts, scopes, N+1, pagination, transactions, raw SQL
 - `laravel-rest-api` — the edge: routing, binding, form requests, resources, authorization, error mapping
 - `laravel-async` — events, queued jobs, caching and scheduling

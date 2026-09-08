@@ -154,6 +154,7 @@ rules/db-assert-inclusion-and-exclusion.md
 
 ## Related Skills
 
+- `laravel-engineering` — decide which changed boundary needs proof and keep docs current
 - `laravel-patterns` — the layers these tests are organized around
 - `laravel-eloquent` — the query rules the database tests assert
 - `laravel-rest-api` — the endpoints the feature tests cover

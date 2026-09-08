@@ -3,6 +3,11 @@
   "notGrouped": "bottom",
   "groupings": [
     {
+      "title": "Engineering",
+      "description": "Context-aware implementation, simple design, explicit failures and critical-path verification for Laravel changes.",
+      "skills": ["engineering"]
+    },
+    {
       "title": "Architecture",
       "description": "How to place a class in a domain-driven Laravel application: Action, Service, Repository, Query Class, Value Object.",
       "skills": ["patterns"]

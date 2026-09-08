@@ -1,7 +1,7 @@
 {
   "name": "laravel-skill",
   "version": "1.1.2",
-  "description": "Laravel architecture, Eloquent, REST API, async and testing skills — Action / Service / Repository / Query Class / Value Object patterns for domain-driven Laravel apps.",
+  "description": "Laravel engineering, architecture, Eloquent, REST API, async and testing skills — context-aware implementation and domain-driven patterns for Laravel apps.",
   "author": {
     "name": "Foysal Ahmed",
     "email": "foysal20x@gmail.com"
@@ -9,6 +9,6 @@
   "homepage": "https://github.com/Foysal50x/skills",
   "repository": "https://github.com/Foysal50x/skills",
   "license": "MIT",
-  "keywords": ["laravel", "php", "eloquent", "architecture", "ddd", "testing"],
+  "keywords": ["laravel", "php", "engineering", "eloquent", "architecture", "ddd", "testing"],
   "skills": "./skills"
 }

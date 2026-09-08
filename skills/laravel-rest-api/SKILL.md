@@ -164,6 +164,7 @@ rules/resource-when-loaded-for-relations.md
 
 ## Related Skills
 
+- `laravel-engineering` — read callers and configuration before changing a boundary
 - `laravel-patterns` — where the logic goes once the request is translated
 - `laravel-eloquent` — pagination, eager loading and query rules behind the Repository
 - `laravel-async` — dispatching work from a request without blocking the response

@@ -5,7 +5,7 @@
     "email": "foysal20x@gmail.com"
   },
   "metadata": {
-    "description": "Opinionated Laravel engineering skills for AI coding agents."
+    "description": "Engineering and writing skills for AI agents."
   },
   "plugins": [
     {
@@ -16,6 +16,25 @@
       "author": {
         "name": "Foysal Ahmed",
         "email": "foysal20x@gmail.com"
+      },
+      "category": "productivity",
+      "skills": [
+        "./skills/laravel-async",
+        "./skills/laravel-eloquent",
+        "./skills/laravel-engineering",
+        "./skills/laravel-patterns",
+        "./skills/laravel-rest-api",
+        "./skills/laravel-testing"
+      ]
+    },
+    {
+      "name": "humanize-ai-writing",
+      "source": "./skills/humanize-ai-writing",
+      "description": "Revise text or draft natural prose while preserving facts, meaning, voice and language.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Foysal Ahmed",
+        "email": "Foysal20x@gmail.com"
       },
       "category": "productivity"
     }

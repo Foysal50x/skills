@@ -1,0 +1,10 @@
+{
+  "name": "humanize-ai-writing",
+  "version": "1.0.0",
+  "description": "Revise existing text or draft natural prose in multiple languages, using 12 writing rules while preserving meaning and factual accuracy.",
+  "author": {
+    "email": "Foysal20x@gmail.com",
+    "name": "Foysal Ahmed"
+  },
+  "license": "MIT"
+}

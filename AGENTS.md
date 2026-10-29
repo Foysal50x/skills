@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Repository Overview
 
-A collection of Laravel engineering skills for AI coding agents. Five skills, 201 rules, targeting Laravel `^12.0 || ^13.0` on PHP `^8.3`.
+A collection of portable skills for AI agents: one standalone writing skill and six Laravel engineering skills with 209 rules. The Laravel skills target Laravel `^12.0 || ^13.0` on PHP `^8.3`.
 
 This repo contains **documentation, not application code**. There is no PHP to run — the PHP in rule files is illustrative.
 
@@ -103,7 +103,13 @@ A rule is read on demand, so its length is paid on every read. Keep the load pat
 
 Sections are ordered by impact — what breaks an application first comes first.
 
-## Adding a Skill
+## Adding a standalone skill
+
+Use `skills/{name}/SKILL.md` with a matching portable name and concrete description. Bundle its relative references in the same folder. Standalone skills do not require Laravel-specific routing blocks, rule sections, or generated `AGENTS.md`. Add them to `skills.sh.json` and the root README, then run `npm run check`.
+
+The marketplace explicitly selects the Laravel skill folders for `laravel-skill`. Keep standalone plugin entries separate; the writing plugin loads directly from `skills/humanize-ai-writing/`. `npm run package:humanize` exports its OpenAI package to ignored `dist/` from the canonical skill and `packaging/humanize-ai-writing/plugin.json`.
+
+## Adding a Laravel skill
 
 1. `mkdir -p skills/{name}/{rules,references}`
 2. Write `SKILL.md` with `name` matching the directory. Keep the `laravel-` prefix: a skills.sh or manual install has no namespace, so the directory name is the whole skill name. Open the description with "Laravel" and name concrete situations — it is the strongest trigger signal.
@@ -125,7 +131,9 @@ npm run release -- --dry-run --minor  # print every step, change nothing
 npm run release -- --notes-file notes.md   # hand-written release body
 ```
 
-It writes 13 files: `package.json`, both `.claude-plugin/` manifests, and each skill's `metadata.json` (version and `date`) and `SKILL.md` frontmatter. Each is matched as an exact key, so a version string sitting in prose is never rewritten by a release.
+The default release updates only the Laravel bundle: `package.json`, both `.claude-plugin/` manifests, and each Laravel skill's `metadata.json` (version and `date`) and `SKILL.md` frontmatter. Each is matched as an exact key, so a version string sitting in prose is never rewritten by a release.
+
+Use `npm run release -- --plugin humanize-ai-writing --patch` for an independent writing release. It updates the writing marketplace entry and both writing plugin manifests, with `humanize-ai-writing-vX.Y.Z` tags. The default Laravel release retains `vX.Y.Z` tags. Versions move only through the release script.
 
 It refuses to run when any of these is true, because each one produces a release nobody can trust:
 

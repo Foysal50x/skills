@@ -7,17 +7,18 @@
 //   npm run release -- --minor           bump without being asked
 //   npm run release -- --dry-run         print every step, change nothing
 //   npm run release -- --notes-file p    release body from a file instead of the commit log
+//   npm run release -- --plugin humanize-ai-writing --patch  release the writing plugin
 //   npm run release -- --yes             skip the confirmation prompt (implies non-interactive)
 //
 // Everything is written by the repository's own git identity. The script never
 // sets an author, a committer or a co-author trailer.
 
-import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { createInterface } from 'node:readline/promises'
-import { SKILLS_DIR, listSkills } from './lib.mjs'
+import { versionTargets, dateTargets, currentVersion } from './release-manifests.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const RELEASE_BRANCH = 'main'
@@ -30,6 +31,13 @@ const option = (name) => {
   const index = argv.indexOf(`--${name}`)
   return index !== -1 ? argv[index + 1] : undefined
 }
+
+const PLUGIN = option('plugin') ?? 'laravel-skill'
+if (!['laravel-skill', 'humanize-ai-writing'].includes(PLUGIN)) {
+  process.stderr.write(`Unknown plugin: ${PLUGIN}\n`)
+  process.exit(1)
+}
+const TAG_PATTERN = PLUGIN === 'laravel-skill' ? 'v[0-9]*' : `${PLUGIN}-v[0-9]*`
 
 const DRY_RUN = flag('dry-run')
 const ASSUME_YES = flag('yes')
@@ -74,38 +82,6 @@ function isNewer(next, current) {
     if (a[i] !== b[i]) return a[i] > b[i]
   }
   return false
-}
-
-/**
- * Every place a version is written, as an exact key rather than a loose search —
- * a stray "1.1.0" inside prose must not be rewritten by a release.
- */
-function versionTargets() {
-  const targets = [
-    { file: join(ROOT, 'package.json'), pattern: /("version":\s*")\d+\.\d+\.\d+(")/ },
-    { file: join(ROOT, '.claude-plugin', 'plugin.json'), pattern: /("version":\s*")\d+\.\d+\.\d+(")/ },
-    { file: join(ROOT, '.claude-plugin', 'marketplace.json'), pattern: /("version":\s*")\d+\.\d+\.\d+(")/ },
-  ]
-
-  for (const skill of listSkills()) {
-    targets.push({ file: join(SKILLS_DIR, skill, 'metadata.json'), pattern: /("version":\s*")\d+\.\d+\.\d+(")/ })
-    // The frontmatter key is nested under `metadata:`, so match the indent too.
-    targets.push({ file: join(SKILLS_DIR, skill, 'SKILL.md'), pattern: /(\n\s+version:\s*")\d+\.\d+\.\d+(")/ })
-  }
-
-  return targets.filter((target) => existsSync(target.file))
-}
-
-/** `date: "August 2026"` in each skill manifest — documentation, not a version, but it goes stale the same way. */
-function dateTargets() {
-  return listSkills()
-    .map((skill) => join(SKILLS_DIR, skill, 'metadata.json'))
-    .filter(existsSync)
-    .map((file) => ({ file, pattern: /("date":\s*")[^"]*(")/ }))
-}
-
-function currentVersion() {
-  return JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
 }
 
 function rewrite(targets, replacement) {
@@ -169,7 +145,7 @@ function assertTagIsFree(tag) {
 
 function previousTag() {
   try {
-    return run('git', ['describe', '--tags', '--abbrev=0'])
+    return run('git', ['describe', '--tags', '--abbrev=0', '--match', TAG_PATTERN])
   } catch {
     return null
   }
@@ -178,7 +154,7 @@ function previousTag() {
 /** The tag before `tag`. Null on a first release, where there is nothing to compare against. */
 function previousTagBefore(tag) {
   try {
-    return run('git', ['describe', '--tags', '--abbrev=0', `${tag}^`])
+    return run('git', ['describe', '--tags', '--abbrev=0', '--match', TAG_PATTERN, `${tag}^`])
   } catch {
     return null
   }
@@ -243,22 +219,22 @@ async function confirm(question) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const current = currentVersion()
+const current = currentVersion(ROOT, PLUGIN)
 assertReleasable()
 
 const version = await chooseVersion(current)
 if (!SEMVER.test(version)) die(`"${version}" is not a semantic version`, 'expected MAJOR.MINOR.PATCH, e.g. 1.2.0')
 if (!isNewer(version, current)) die(`${version} is not newer than ${current}`, 'a release only ever moves forward')
 
-const tag = `v${version}`
+const tag = PLUGIN === 'laravel-skill' ? `v${version}` : `${PLUGIN}-v${version}`
 assertTagIsFree(tag)
 
 step(`Releasing ${current} → ${version}`)
 if (DRY_RUN) note('dry run — nothing will be written, committed or pushed')
 
 step('Bumping manifests')
-const bumped = rewrite(versionTargets(), version)
-const dated = rewrite(dateTargets(), new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }))
+const bumped = rewrite(versionTargets(ROOT, PLUGIN), version)
+const dated = rewrite(dateTargets(ROOT, PLUGIN), new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }))
 for (const file of [...new Set([...bumped, ...dated])].sort()) note(file)
 
 step('Running npm run check')
@@ -275,7 +251,7 @@ if (DRY_RUN) {
 
 step('Committing')
 mutate('git', ['add', '-A'])
-mutate('git', ['commit', '-m', `Release ${version}`])
+mutate('git', ['commit', '-m', `Release ${PLUGIN} ${version}`])
 
 step(`Pushing to ${RELEASE_BRANCH}`)
 if (!(await confirm(`  Push ${tag} to origin/${RELEASE_BRANCH} and publish the release?`))) {
@@ -284,7 +260,7 @@ if (!(await confirm(`  Push ${tag} to origin/${RELEASE_BRANCH} and publish the r
 mutate('git', ['push', 'origin', RELEASE_BRANCH])
 
 step('Tagging')
-mutate('git', ['tag', '-a', tag, '-m', `Release ${version}`])
+mutate('git', ['tag', '-a', tag, '-m', `Release ${PLUGIN} ${version}`])
 mutate('git', ['push', 'origin', tag])
 
 step('Publishing the GitHub release')

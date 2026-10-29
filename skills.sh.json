@@ -31,6 +31,11 @@
       "title": "Testing",
       "description": "Test strategy per architectural layer, fakes, database tests and feature tests.",
       "skills": ["testing"]
+    },
+    {
+      "title": "Writing",
+      "description": "Plain-language editing and multilingual drafting that preserve meaning and voice.",
+      "skills": ["humanize-ai-writing"]
     }
   ]
 }

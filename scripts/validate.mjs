@@ -3,7 +3,7 @@
 // Exits non-zero on any error. Usage: node scripts/validate.mjs
 
 import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { SKILLS_DIR, listSkills, listRules, parseSections, splitFrontmatter, parseFrontmatter } from './lib.mjs'
 
 const SKILL_MD_MAX_LINES = 500
@@ -61,12 +61,23 @@ for (const skill of skills) {
   if (meta.name && meta.name !== skill) fail(`SKILL.md name "${meta.name}" does not match directory "${skill}"`)
   if (!meta.description) fail('SKILL.md frontmatter has no `description`')
   if (meta.description && meta.description.length < 60) fail('SKILL.md description is too short to trigger reliably')
+  if (meta.name && (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(meta.name) || meta.name.length > 64)) fail('invalid skill name')
+  if (meta.description?.length > 1024) fail('description exceeds 1024 characters')
   if (meta.name) skillNames.add(meta.name)
 
   const lineCount = skillSource.split('\n').length
   if (lineCount > SKILL_MD_MAX_LINES) fail(`SKILL.md is ${lineCount} lines (budget ${SKILL_MD_MAX_LINES})`)
 
+  // Check local Markdown references for standalone skills as well as rule collections.
+  for (const [, target] of skillSource.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    if (/^(?:[a-z]+:|#)/i.test(target)) continue
+    const path = resolve(dir, target.split('#')[0])
+    if (!path.startsWith(resolve(dir) + sep) || !existsSync(path)) fail(`SKILL.md has missing or escaping reference: ${target}`)
+  }
+
   const rulesDir = join(dir, 'rules')
+  // Laravel collections always require sections; a standalone skill needs only SKILL.md.
+  if (!skill.startsWith('laravel-') && !existsSync(rulesDir)) continue
   const sectionsPath = join(rulesDir, '_sections.md')
   if (!existsSync(sectionsPath)) {
     fail('missing rules/_sections.md')

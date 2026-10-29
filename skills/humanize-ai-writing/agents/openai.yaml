@@ -1,0 +1,6 @@
+interface:
+  display_name: "Humanize AI Writing"
+  short_description: "Natural writing, clear meaning"
+  default_prompt: "Use $humanize-ai-writing to revise my text or draft natural prose from my brief, preserving meaning and language."
+policy:
+  allow_implicit_invocation: true

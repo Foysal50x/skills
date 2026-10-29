@@ -1,0 +1,34 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "author": {
+    "email": "Foysal20x@gmail.com",
+    "name": "Foysal Ahmed"
+  },
+  "description": "Revise existing text or draft natural prose in multiple languages, using 12 writing rules while preserving meaning and factual accuracy.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "capabilities": [],
+        "category": "Communication",
+        "defaultPrompt": [
+          "Humanize this text while preserving its meaning, facts, and voice.",
+          "Draft clear, natural writing from my brief.",
+          "Rewrite this in its original language without formulaic phrasing."
+        ],
+        "developerName": "Foysal Ahmed",
+        "displayName": "Humanize AI Writing",
+        "longDescription": "Revise user-provided text or generate new writing from a brief. Applies the user's 12 writing rules with exemptions for meaning, facts, quotations, terminology, and language conventions. Supports multilingual prose and preserves the author's voice. No AI-detector guarantees.",
+        "shortDescription": "Natural writing, clear meaning"
+      }
+    }
+  },
+  "keywords": [
+    "writing",
+    "editing",
+    "humanize",
+    "multilingual",
+    "plain-language"
+  ],
+  "name": "humanize-ai-writing",
+  "version": "1.0.0"
+}

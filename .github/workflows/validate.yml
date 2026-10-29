@@ -5,22 +5,33 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
       - name: Compile AGENTS.md
         run: node scripts/build-agents.mjs
       - name: Validate skills
         run: node scripts/validate.mjs
+      - name: Test standalone skills, packaging and release isolation
+        run: npm test
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.3'
+          coverage: none
       - name: Lint examples across rules
         run: node scripts/lint-examples.mjs
       - name: Fail if AGENTS.md is stale

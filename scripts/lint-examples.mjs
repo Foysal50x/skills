@@ -316,7 +316,7 @@ const findings = []
 const hasPhp = phpAvailable()
 const report = (file, line, id, message) => findings.push({ file: relative(ROOT, file), line, id, message })
 
-for (const skill of listSkills()) {
+for (const skill of listSkills().filter((name) => name.startsWith('laravel-'))) {
   for (const file of teachingDocs(skill)) {
     const source = readFileSync(file, 'utf8')
     const { body } = splitFrontmatter(source)

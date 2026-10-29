@@ -37,6 +37,23 @@ function frontmatterProblems(frontmatter) {
   return problems
 }
 
+function withoutFencedCode(source) {
+  let fence = null
+  return source.split('\n').map((line) => {
+    if (fence) {
+      const closing = line.match(/^ {0,3}(`{3,}|~{3,})[\t ]*\r?$/)
+      if (closing && closing[1][0] === fence[0] && closing[1].length >= fence.length) fence = null
+      return ''
+    }
+    const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
+    if (opening && !(opening[1][0] === '`' && opening[2].includes('`'))) {
+      fence = opening[1]
+      return ''
+    }
+    return line
+  }).join('\n')
+}
+
 const errors = []
 const warnings = []
 const skills = listSkills()
@@ -71,7 +88,7 @@ for (const skill of skills) {
   // Check local Markdown references for standalone skills as well as rule collections.
   // Capture the destination separately from angle delimiters and optional link titles.
   const inlineLinks = /\[[^\]]*\]\(\s*(?:<([^<>\n]*)>|((?:\\.|[^\s()\\]|\((?:\\.|[^()\\])*\))+))(?:\s+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^()\\])*\)))?\s*\)/g
-  for (const [, angleTarget, bareTarget] of skillSource.matchAll(inlineLinks)) {
+  for (const [, angleTarget, bareTarget] of withoutFencedCode(skillSource).matchAll(inlineLinks)) {
     const target = angleTarget ?? bareTarget
     if (/^(?:[a-z]+:|#)/i.test(target)) continue
     const path = resolve(dir, target.split('#')[0])

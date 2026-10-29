@@ -84,6 +84,44 @@ for (const destination of [
   }))
 }
 
+for (const example of [
+  '```markdown\n[Example](missing-example.md)\n```',
+  '~~~markdown\n[Example](missing-example.md)\n~~~',
+  '````markdown\n```\n[Example](missing-example.md)\n~~~\n````',
+  '   ```markdown\n[Example](missing-example.md)\n   ````',
+]) {
+  test(`fenced Markdown examples are excluded but surrounding prose is validated: ${example.split('\n')[0]}`, () => fixture((dir) => {
+    const skill = join(dir, 'skills/fence-test')
+    mkdirSync(skill)
+    writeFileSync(join(skill, 'guide.md'), '# Guide\n')
+    writeFileSync(join(dir, 'outside.md'), '# Outside\n')
+    const source = '---\nname: fence-test\ndescription: Validate prose references while excluding illustrative links inside Markdown code fences.\n---\n'
+    const write = (before, after) => writeFileSync(join(skill, 'SKILL.md'), `${source}${before}\n${example}\n${after}\n`)
+    write('[Before](guide.md)', '[After](<guide.md> "Guide")')
+    const valid = validate(dir)
+    assert.equal(valid.status, 0, valid.stderr)
+    for (const [before, after] of [
+      ['[Missing](missing.md)', '[After](guide.md)'],
+      ['[Before](guide.md)', '[Missing](missing.md)'],
+      ['[Before](guide.md)', '[Outside](../../outside.md)'],
+    ]) {
+      write(before, after)
+      const invalid = validate(dir)
+      assert.equal(invalid.status, 1)
+      assert.match(invalid.stderr, /missing or escaping reference/)
+      assert.doesNotMatch(invalid.stderr, /missing-example\.md/)
+    }
+  }))
+}
+
+test('an unclosed code fence excludes examples through the end of the document', () => fixture((dir) => {
+  const skill = join(dir, 'skills/fence-test')
+  mkdirSync(skill)
+  writeFileSync(join(skill, 'SKILL.md'), '---\nname: fence-test\ndescription: Validate prose references while excluding illustrative links inside Markdown code fences.\n---\n```markdown\n[Example](missing-example.md)\n')
+  const result = validate(dir)
+  assert.equal(result.status, 0, result.stderr)
+}))
+
 test('a damaged Laravel collection still fails validation', () => fixture((dir) => {
   mkdirSync(join(dir, 'skills/laravel-broken'))
   writeFileSync(join(dir, 'skills/laravel-broken/SKILL.md'), '---\nname: laravel-broken\ndescription: Laravel collection used to verify that required section metadata stays mandatory.\n---\n')

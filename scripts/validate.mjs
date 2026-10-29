@@ -97,7 +97,7 @@ for (const skill of skills) {
 
   const rulesDir = join(dir, 'rules')
   // Laravel collections always require sections; a standalone skill needs only SKILL.md.
-  if (!skill.startsWith('laravel-') && !existsSync(rulesDir)) continue
+  if (!skill.startsWith('laravel-')) continue
   const sectionsPath = join(rulesDir, '_sections.md')
   if (!existsSync(sectionsPath)) {
     fail('missing rules/_sections.md')

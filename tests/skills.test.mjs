@@ -122,8 +122,17 @@ test('an unclosed code fence excludes examples through the end of the document',
   assert.equal(result.status, 0, result.stderr)
 }))
 
+test('standalone skills can have rules without Laravel section metadata', () => fixture((dir) => {
+  cpSync(join(root, 'skills/humanize-ai-writing'), join(dir, 'skills/humanize-ai-writing'), { recursive: true })
+  const rules = join(dir, 'skills/humanize-ai-writing/rules')
+  mkdirSync(rules)
+  writeFileSync(join(rules, 'writing.md'), '# Writing guidance\nPreserve the author\'s meaning.\n')
+  const result = validate(dir)
+  assert.equal(result.status, 0, result.stderr)
+}))
+
 test('a damaged Laravel collection still fails validation', () => fixture((dir) => {
-  mkdirSync(join(dir, 'skills/laravel-broken'))
+  mkdirSync(join(dir, 'skills/laravel-broken/rules'), { recursive: true })
   writeFileSync(join(dir, 'skills/laravel-broken/SKILL.md'), '---\nname: laravel-broken\ndescription: Laravel collection used to verify that required section metadata stays mandatory.\n---\n')
   const result = validate(dir)
   assert.equal(result.status, 1)

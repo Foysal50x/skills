@@ -22,7 +22,7 @@ Follow explicit user requirements for genre, formatting, or tone. Lists, conclus
 
 Use the user's requested language; otherwise retain the source language for revision and the user's language for drafting. Preserve dialect, register, script, and intentional code-switching. Do not translate unless asked. Apply the principles to equivalent local cliches rather than translating the English banned-word list literally. Respect native grammar, punctuation, writing direction, and quotation conventions where English typography rules would make the language unnatural or incorrect. This includes languages such as Bangla, Arabic, Spanish, and English; support other languages to the model's ability.
 
-Do not claim that a text is human-authored or guaranteed to pass AI detectors. The goal is better prose. The user's original wording is retained in references/universal-prompt.md for provenance; its broad claims are not performance guarantees.
+Do not claim that a text is human-authored or guaranteed to pass AI detectors. The goal is better prose. The adapted source prompt in references/universal-prompt.md retains attribution and practical writing guidance.
 
 ## HARD RULES
 
@@ -121,4 +121,4 @@ For a detailed pattern catalog, read [references/ai-tells.md](references/ai-tell
 
 ## Source
 
-These rules reproduce the user's supplied universal writing prompt, with transport escaping removed. The bundled [original prompt](references/universal-prompt.md) preserves its attribution and further-reading links. The plugin is self-contained; external references are not required to run it.
+These rules adapt the user's supplied universal writing prompt. The bundled [source prompt](references/universal-prompt.md) preserves its attribution and further-reading links. The plugin is self-contained; external references are not required to run it.

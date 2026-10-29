@@ -161,7 +161,7 @@ The writing skill is standalone:
 ```text
 skills/humanize-ai-writing/
   SKILL.md                         workflow and 12 writing rules
-  references/universal-prompt.md    original prompt and attribution
+  references/universal-prompt.md    adapted source prompt and attribution
   references/ai-tells.md             full pattern catalog
   references/rewrite-rules.md        before/after editing examples
   agents/openai.yaml               optional OpenAI display metadata

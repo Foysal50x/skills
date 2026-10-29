@@ -4,7 +4,7 @@ description: Laravel implementation discipline for tracing context, reusing pres
 license: MIT
 metadata:
   author: Foysal Ahmed
-  version: "1.1.2"
+  version: "1.2.0"
   laravel: "^12.0 || ^13.0"
   php: "^8.3"
 ---

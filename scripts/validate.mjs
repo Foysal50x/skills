@@ -69,7 +69,10 @@ for (const skill of skills) {
   if (lineCount > SKILL_MD_MAX_LINES) fail(`SKILL.md is ${lineCount} lines (budget ${SKILL_MD_MAX_LINES})`)
 
   // Check local Markdown references for standalone skills as well as rule collections.
-  for (const [, target] of skillSource.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+  // Capture the destination separately from angle delimiters and optional link titles.
+  const inlineLinks = /\[[^\]]*\]\(\s*(?:<([^<>\n]*)>|((?:\\.|[^\s()\\]|\((?:\\.|[^()\\])*\))+))(?:\s+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^()\\])*\)))?\s*\)/g
+  for (const [, angleTarget, bareTarget] of skillSource.matchAll(inlineLinks)) {
+    const target = angleTarget ?? bareTarget
     if (/^(?:[a-z]+:|#)/i.test(target)) continue
     const path = resolve(dir, target.split('#')[0])
     if (!path.startsWith(resolve(dir) + sep) || !existsSync(path)) fail(`SKILL.md has missing or escaping reference: ${target}`)

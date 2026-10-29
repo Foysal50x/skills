@@ -57,6 +57,33 @@ test('standalone skill validates and rejects a missing bundled reference', () =>
   assert.match(invalid.stderr, /missing or escaping reference/)
 }))
 
+for (const destination of [
+  'references/guide.md "Reference title"',
+  "references/guide.md 'Reference title'",
+  'references/guide.md (Reference title)',
+  '<references/guide.md>',
+  '<references/guide.md> "Reference title"',
+  "<references/guide.md> 'Reference title'",
+  '<references/guide.md> (Reference title)',
+  '<references/guide notes.md> "Reference (optional)"',
+  'references/guide(v2).md "Reference title"',
+]) {
+  test(`local Markdown link resolves its destination: ${destination}`, () => fixture((dir) => {
+    const skill = join(dir, 'skills/link-test')
+    mkdirSync(join(skill, 'references'), { recursive: true })
+    for (const name of ['guide.md', 'guide notes.md', 'guide(v2).md']) {
+      writeFileSync(join(skill, 'references', name), '# Guide\n')
+    }
+    writeFileSync(join(skill, 'SKILL.md'), `---\nname: link-test\ndescription: Validate local Markdown reference links while keeping optional titles out of paths.\n---\n[Guide](${destination})\n`)
+    const valid = validate(dir)
+    assert.equal(valid.status, 0, valid.stderr)
+    rmSync(join(skill, 'references'), { recursive: true })
+    const missing = validate(dir)
+    assert.equal(missing.status, 1)
+    assert.match(missing.stderr, /missing or escaping reference/)
+  }))
+}
+
 test('a damaged Laravel collection still fails validation', () => fixture((dir) => {
   mkdirSync(join(dir, 'skills/laravel-broken'))
   writeFileSync(join(dir, 'skills/laravel-broken/SKILL.md'), '---\nname: laravel-broken\ndescription: Laravel collection used to verify that required section metadata stays mandatory.\n---\n')

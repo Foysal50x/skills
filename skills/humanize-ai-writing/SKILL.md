@@ -18,7 +18,7 @@ Write clear, specific prose in the user's intended voice. Apply all 12 rules bel
 
 The rules are editing defaults, not mechanical word deletion. Keep an otherwise flagged word or construction when changing it would lose meaning. Preserve exact quotations, names, titles, technical terms, code, and intentional literary choices. Rewrite surrounding prose instead. A genuine contrast, necessary three-item list, meaningful action verb, or factual "-ing" clause is allowed; remove formulaic filler, not information.
 
-Follow explicit user requirements for genre, formatting, or tone. Lists, conclusions, emphasis, and promotional copy may be appropriate when requested; keep claims concrete and supported. Preserve useful citations and functioning links. Strip "+1", ":::", or other listed artifacts only when they are copy-paste debris, never when they are meaningful notation, code, or required output syntax. Remove tracking parameters without damaging other query parameters or link targets.
+Follow explicit user requirements for genre, formatting, or tone. Lists, conclusions, emphasis, and promotional copy may be appropriate when requested; keep claims concrete and supported. Preserve useful citations and functioning links. Strip "+1", ":::", or other listed artifacts only when they are copy-paste debris, never when they are meaningful notation, code, or required output syntax. Preserve link destinations and all query parameters during ordinary revisions. Remove tracking parameters only when the user explicitly requests tracking removal, without damaging other query parameters or link targets.
 
 Use the user's requested language; otherwise retain the source language for revision and the user's language for drafting. Preserve dialect, register, script, and intentional code-switching. Do not translate unless asked. Apply the principles to equivalent local cliches rather than translating the English banned-word list literally. Respect native grammar, punctuation, writing direction, and quotation conventions where English typography rules would make the language unnatural or incorrect. This includes languages such as Bangla, Arabic, Spanish, and English; support other languages to the model's ability.
 
@@ -96,7 +96,7 @@ instead of cycling synonyms, elegant variation is a tell, not a virtue.
 
 ### 12. No copy-paste artifacts
 Strip: contentReference, oaicite, oai_citation, turn0search0, "+1", grok_card,
-":::", utm_source= in links, markdown leaking where it shouldn't, curly-quote noise.
+":::", markdown leaking where it shouldn't, curly-quote noise.
 
 ## VOICE DEFAULTS
 - Active voice, concrete subjects. Contractions are fine.

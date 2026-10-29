@@ -86,7 +86,11 @@ instead of cycling synonyms, elegant variation is a tell, not a virtue.
 
 ### 12. No copy-paste artifacts
 Strip: contentReference, oaicite, oai_citation, turn0search0, "+1", grok_card,
-":::", utm_source= in links, markdown leaking where it shouldn't, curly-quote noise.
+":::", markdown leaking where it shouldn't, curly-quote noise.
+
+Preserve link destinations and all query parameters during ordinary revisions.
+Remove tracking parameters only when the user explicitly requests tracking
+removal, without damaging other query parameters or link targets.
 
 ## VOICE DEFAULTS
 - Active voice, concrete subjects. Contractions are fine.

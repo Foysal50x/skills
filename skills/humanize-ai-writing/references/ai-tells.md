@@ -112,8 +112,6 @@ These are weak evidence in isolation — don't treat them as proof, and when
 - Generic promotional tone by itself — humans write marketing too.
 - **AI-detector tools** — high error rates; they flag human text constantly.
 
-## Composite signal
-Confidence rises sharply when several cluster: AI vocabulary + superficial
-analysis + promo tone + excess bold + Title Case + inline-header lists. Human
-judgment alone is near chance; pattern-matching the clustered list is what works.
-When generating, the rule is simpler: avoid producing these patterns at all.
+## Editing guidance
+Use the listed patterns as editing cues while preserving meaning and voice.
+When generating, avoid producing these patterns.
